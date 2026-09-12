@@ -1058,6 +1058,7 @@
         <div class="sidebar-cloud" id="sidebar-cloud">
             <span class="cloud-dot" id="cloud-dot"></span>
             <span class="cloud-text" id="cloud-text">数据加载中…</span>
+            <button class="cloud-refresh" title="保存数据到云端" onclick="cloudSync.manualSave()">💾 保存</button>
             <button class="cloud-refresh" title="从云端刷新最新数据" onclick="location.reload()">↻</button>
         </div>
         <div class="sidebar-footer">
@@ -2198,19 +2199,33 @@ const cloudSync = {
         return false;
     },
     schedulePush: function() {
-        if (this.pushTimer) clearTimeout(this.pushTimer);
+        if (!this.ready) return;
+        this.setStatus('pending');
+        if (typeof showToast === 'function') showToast('📝 有未保存的修改，请点击「保存」按钮', 'info');
+    },
+    manualSave: function() {
+        if (!this.ready) {
+            if (typeof showToast === 'function') showToast('⚠️ 云端未连接', 'warning');
+            return;
+        }
         this.setStatus('sync');
-        this.pushTimer = setTimeout(() => { this.push(); }, 400);
+        this.push().then(success => {
+            if (success) {
+                this.setStatus('ok');
+                if (typeof showToast === 'function') showToast('✅ 保存成功', 'success');
+            }
+        });
     },
     setStatus: function(state) {
         // 更新左下角状态条
         const dot = document.getElementById('cloud-dot');
         const text = document.getElementById('cloud-text');
         if (dot && text) {
-            dot.className = 'cloud-dot' + (state === 'ok' ? ' ok' : (state === 'warn' ? ' warn' : (state === 'err' ? ' err' : '')));
+            dot.className = 'cloud-dot' + (state === 'ok' ? ' ok' : (state === 'warn' || state === 'pending' ? ' warn' : (state === 'err' ? ' err' : '')));
             if (state === 'ok') text.textContent = '已同步 · ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
             else if (state === 'sync') text.textContent = '同步中...';
             else if (state === 'warn') text.textContent = '有新数据待刷新';
+            else if (state === 'pending') text.textContent = '有未保存的修改';
             else text.textContent = '本地模式';
         }
         // 同时更新系统设置页的状态
