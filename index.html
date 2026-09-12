@@ -2146,20 +2146,24 @@ function saveData(key, data) {
 function applyRemoteDB(db) {
     if (!db) return;
     try {
+        // 把云端数据写入localStorage
         Object.keys(STORE_KEYS).forEach(key => {
             if (db[key] !== undefined) {
                 localStorage.setItem(STORE_KEYS[key], JSON.stringify(db[key]));
             }
         });
-        // 重新加载所有数据变量
-        molds = loadData('molds');
-        fixtures = loadData('fixtures');
-        maintenanceRecords = loadData('maintenance');
-        repairRecords = loadData('repairs');
-        usageRecords = loadData('usage');
-        planRecords = loadData('plans');
-        users = loadData('users');
-        // 刷新页面
+        
+        // 直接从localStorage读取，不用loadData（避免从source/data.js读旧数据覆盖）
+        const get = k => JSON.parse(localStorage.getItem(STORE_KEYS[k]) || '[]');
+        molds = get('molds');
+        fixtures = get('fixtures');
+        maintenanceRecords = get('maintenance');
+        repairRecords = get('repairs');
+        usageRecords = get('usage');
+        planRecords = get('plans');
+        users = get('users');
+        
+        // 刷新界面
         if (typeof renderAll === 'function') renderAll();
     } catch(e) {
         console.warn('applyRemoteDB error', e);
