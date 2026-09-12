@@ -2142,6 +2142,30 @@ function saveData(key, data) {
 // ============================================================
 // 云端同步层（同源 /api/db，Cloudflare Pages + KV）
 // ============================================================
+// 把云端数据应用到本地
+function applyRemoteDB(db) {
+    if (!db) return;
+    try {
+        Object.keys(STORE_KEYS).forEach(key => {
+            if (db[key] !== undefined) {
+                localStorage.setItem(STORE_KEYS[key], JSON.stringify(db[key]));
+            }
+        });
+        // 重新加载所有数据变量
+        molds = loadData('molds');
+        fixtures = loadData('fixtures');
+        maintenance = loadData('maintenance');
+        repairs = loadData('repairs');
+        usage = loadData('usage');
+        plans = loadData('plans');
+        users = loadData('users');
+        // 刷新页面
+        if (typeof renderAll === 'function') renderAll();
+    } catch(e) {
+        console.warn('applyRemoteDB error', e);
+    }
+}
+
 const CLOUD_CONFIG = { apiBase: '' };
 
 const cloudSync = {
