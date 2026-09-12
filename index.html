@@ -2225,34 +2225,18 @@ const cloudSync = {
             const remote = await this.pull();
             if (!remote || !remote.db) { this.setStatus('ok'); return; }
             const remoteVer = remote.version || 0;
-            const localVer = Number(localStorage.getItem('mold_cloud_ver') || 0);
-            // 云端有数据且比本地新（或本地还没存过版本）
-            if (remoteVer > localVer && remote.db.molds) {
-                // 云端有更新，先提示用户，不自动覆盖
-                this.version = remoteVer;
-                this.ready = true;
-                this.setStatus('warn');
-                if (typeof showToast === 'function') {
-                    showToast('⚠️ 检测到云端有新数据，点侧边栏 ↻ 可刷新，你的本地修改会保留', 'info', 5000);
-                }
-                return;
-            }
-            // 本地有未上云数据（localVer < remoteVer 但本地有新改动）——直接推送
-            if (localVer && localVer < remoteVer) {
-                this.setStatus('ok');
-            }
-            // 本地版本更高（离线录过），推送
-            if (localVer > remoteVer) {
-                await this.push();
-                return;
-            }
+            
+            // 总是以服务器数据为准，直接应用
             this.version = remoteVer;
             this.ready = true;
             this.setStatus('ok');
-            // 记录云端版本
             localStorage.setItem('mold_cloud_ver', String(remoteVer));
-            // 定时轮询
             this.startPolling();
+            
+            // 应用服务器数据到本地
+            if (typeof applyRemoteDB === 'function') {
+                applyRemoteDB(remote.db);
+            }
         } catch(e) { console.warn('cloud init', e); this.setStatus('err'); }
     },
     startPolling: function() {
