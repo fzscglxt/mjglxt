@@ -2154,10 +2154,10 @@ function applyRemoteDB(db) {
         // 重新加载所有数据变量
         molds = loadData('molds');
         fixtures = loadData('fixtures');
-        maintenance = loadData('maintenance');
-        repairs = loadData('repairs');
-        usage = loadData('usage');
-        plans = loadData('plans');
+        maintenanceRecords = loadData('maintenance');
+        repairRecords = loadData('repairs');
+        usageRecords = loadData('usage');
+        planRecords = loadData('plans');
         users = loadData('users');
         // 刷新页面
         if (typeof renderAll === 'function') renderAll();
