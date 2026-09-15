@@ -1297,7 +1297,7 @@
                             <thead>
                                 <tr>
                                     <th>日期</th><th>模具编号</th><th>模具名称</th><th>保养类型</th>
-                                    <th>保养内容</th><th>更换配件</th><th>保养费用</th><th>执行人</th><th>结果</th><th>操作</th>
+                                    <th>保养内容</th><th>保养图片</th><th>更换配件</th><th>保养费用</th><th>执行人</th><th>结果</th><th>操作</th>
                                 </tr>
                             </thead>
                             <tbody id="maint-tbody"></tbody>
@@ -1793,6 +1793,12 @@
             <div class="form-group">
                 <label>保养内容 *</label>
                 <textarea id="maint-content" placeholder="如：清理分型面、检查顶针、润滑导柱导套、检查冷却水路..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>保养图片</label>
+                <input type="file" id="maint-photo-file" accept="image/*" onchange="handleMaintPhotoUpload(this)">
+                <div id="maint-photo-preview" style="margin-top:8px;"></div>
+                <input type="hidden" id="maint-photo">
             </div>
             <div class="form-group">
                 <label>更换配件</label>
@@ -4709,6 +4715,36 @@ function fillMoldSelect(selectId) {
     sel.innerHTML = '<option value="">请选择模具</option>' + molds.map(m => `<option value="${m.id}">${escapeHtml(m.code)} - ${escapeHtml(m.name)}</option>`).join('');
 }
 
+function handleMaintPhotoUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('请选择图片文件'); input.value=''; return; }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        // 压缩图片：最大宽度800px，JPEG质量0.7
+        const img = new Image();
+        img.onload = function() {
+            const maxW = 800;
+            let w = img.width, h = img.height;
+            if (w > maxW) { h = h * maxW / w; w = maxW; }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL('image/jpeg', 0.7);
+            document.getElementById('maint-photo').value = compressed;
+            document.getElementById('maint-photo-preview').innerHTML =
+                '<img src="' + compressed + '" style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="window.open(this.src)">';
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function showMaintPhotoPreview(src) {
+    const p = window.open('', '_blank');
+    p.document.write('<img src="' + src + '" style="max-width:100%;">');
+}
+
 function openMaintenanceForm(id) {
     if (molds.length === 0 && fixtures.length === 0) { alert('请先添加模具或工装'); return; }
     // 初始化模具可搜索下拉组件（清空选中+隐藏列表）
@@ -4719,6 +4755,9 @@ function openMaintenanceForm(id) {
     document.getElementById('maint-result').value = '正常';
     document.getElementById('maint-type').value = '二级保养';
     document.getElementById('maint-date').value = today();
+    document.getElementById('maint-photo').value = '';
+    document.getElementById('maint-photo-file').value = '';
+    document.getElementById('maint-photo-preview').innerHTML = '';
 
     if (id) {
         const r = maintenanceRecords.find(r => r.id === id);
@@ -4734,6 +4773,11 @@ function openMaintenanceForm(id) {
             document.getElementById('maint-worker').value = r.worker || '';
             document.getElementById('maint-result').value = r.result || '正常';
             document.getElementById('maint-notes').value = r.notes || '';
+            if (r.photo) {
+                document.getElementById('maint-photo').value = r.photo;
+                document.getElementById('maint-photo-preview').innerHTML =
+                    '<img src="' + r.photo + '" style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="window.open(this.src)">';
+            }
         }
     }
     document.getElementById('maint-modal-title').textContent = id ? '编辑保养记录' : '新增保养记录';
@@ -4755,6 +4799,7 @@ function saveMaintenance() {
         type: document.getElementById('maint-type').value,
         cost: parseFloat(document.getElementById('maint-cost').value) || 0,
         content,
+        photo: document.getElementById('maint-photo').value || '',
         parts: document.getElementById('maint-parts').value.trim(),
         worker: document.getElementById('maint-worker').value.trim(),
         result: document.getElementById('maint-result').value,
@@ -4839,15 +4884,15 @@ function renderMaintenanceTable() {
     // 步骤2：空状态分支
     if (total === 0) {
         if (maintenanceRecords.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" class="table-empty">暂无保养记录数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" class="table-empty">暂无保养记录数据</td></tr>';
         } else if (search || fType) {
             const conds = [
                 search ? `关键词「${escapeHtml(search)}」` : null,
                 fType ? `类型「${escapeHtml(fType)}」` : null
             ].filter(Boolean).join(' + ');
-            tbody.innerHTML = `<tr><td colspan="10" class="table-empty">🔍 未找到匹配（${conds}）的保养记录，请调整筛选条件</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" class="table-empty">🔍 未找到匹配（${conds}）的保养记录，请调整筛选条件</td></tr>`;
         } else {
-            tbody.innerHTML = '<tr><td colspan="10" class="table-empty">当前筛选条件下暂无保养记录</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" class="table-empty">当前筛选条件下暂无保养记录</td></tr>';
         }
         renderMaintenancePagination(0, maintPage, maintPageSize);
         return;
@@ -4872,6 +4917,7 @@ function renderMaintenanceTable() {
             <td>${escapeHtml(mold?.name||'—')}</td>
             <td>${r.type}</td>
             <td title="${escapeHtml(r.content)}">${escapeHtml(r.content.length > 30 ? r.content.slice(0,30)+'...' : r.content)}</td>
+            <td>${r.photo ? '<img src="' + r.photo + '" style="width:48px;height:48px;object-fit:cover;border-radius:4px;cursor:pointer;border:1px solid #e0e0e0;" onclick="showMaintPhotoPreview(\'' + r.photo + '\')">' : '—'}</td>
             <td>${escapeHtml(r.parts||'—')}</td>
             <td>${fmtMoney(r.cost)}</td>
             <td>${escapeHtml(r.worker||'—')}</td>
