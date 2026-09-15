@@ -1018,6 +1018,9 @@
             <div class="nav-item" data-page="molds">
                 <span class="icon">🔩</span><span>模具台账</span>
             </div>
+            <div class="nav-item" data-page="spare-parts">
+                <span class="icon">📦</span><span>模具备件清单</span>
+            </div>
             <div class="nav-item" data-page="fixtures">
                 <span class="icon">🧰</span><span>工装台账</span>
             </div>
@@ -1176,7 +1179,53 @@
             </div>
         </div>
 
-        <!-- ============ Fixtures Page ============ -->
+        <!-- ============ Spare Parts Page ============ -->
+        <div class="page" id="page-spare-parts">
+            <div class="topbar">
+                <h1>📦 模具备件清单</h1>
+                <div class="topbar-actions">
+                    <button class="btn btn-primary" data-need-edit onclick="openSparePartForm()">➕ 新增备件</button>
+                </div>
+            </div>
+            <div style="padding:20px;">
+                <div style="display:flex;gap:12px;margin-bottom:16px;">
+                    <input type="text" id="spare-search" placeholder="搜索备件名称 / 适用机台..." style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:6px;" oninput="renderSparePartsTable()">
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>备件名称</th><th>备件规格</th><th>适用机台</th><th>机台型号</th><th>供应商</th><th>库存</th><th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="spare-parts-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 备件新增/编辑弹窗 -->
+        <div class="modal-overlay" id="modal-spare-part">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="spare-modal-title">新增备件</h3>
+                    <button class="modal-close" onclick="closeModal('modal-spare-part')">×</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="spare-id">
+                    <div class="form-group"><label>备件名称 *</label><input type="text" id="spare-name" required></div>
+                    <div class="form-group"><label>备件规格</label><input type="text" id="spare-spec"></div>
+                    <div class="form-group"><label>适用机台</label><input type="text" id="spare-machine"></div>
+                    <div class="form-group"><label>机台型号</label><input type="text" id="spare-machine-model"></div>
+                    <div class="form-group"><label>供应商</label><input type="text" id="spare-supplier"></div>
+                    <div class="form-group"><label>库存数量</label><input type="number" id="spare-stock" min="0" value="0"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline" onclick="closeModal('modal-spare-part')">取消</button>
+                    <button class="btn btn-primary" onclick="saveSparePart()">保存</button>
+                </div>
+            </div>
+        </div>
         <div class="page" id="page-fixtures">
             <div class="topbar">
                 <h1>🧰 工装台账</h1>
@@ -2525,6 +2574,7 @@ let maintenanceRecords = loadData('maintenance');
 let repairRecords = loadData('repairs');
 let usageRecords = loadData('usage');
 let planRecords = loadData('plans');
+let spareParts = loadData('spareParts');
 
 function persistMolds() { saveData('molds', molds); markDataDirty(); }
 function persistFixtures() { saveData('fixtures', fixtures); markDataDirty(); }
@@ -2532,6 +2582,7 @@ function persistMaint() { saveData('maintenance', maintenanceRecords); markDataD
 function persistRepairs() { saveData('repairs', repairRecords); markDataDirty(); }
 function persistUsage() { saveData('usage', usageRecords); markDataDirty(); }
 function persistPlans() { saveData('plans', planRecords); markDataDirty(); }
+function persistSpareParts() { saveData('spareParts', spareParts); markDataDirty(); }
 
 // ============================================================
 //  用户与权限系统
@@ -3251,6 +3302,7 @@ function navigateTo(page) {
         stopDashboardRefresh();
     }
     if (page === 'molds') renderMoldTable();
+    if (page === 'spare-parts') renderSparePartsTable();
     if (page === 'fixtures') renderFixtureTable();
     if (page === 'maintenance-plan') renderPlanTable();
     if (page === 'maintenance-records') {
@@ -3270,6 +3322,91 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 // ============================================================
 //  Modal 管理
+// ============================================================
+//  模具备件清单
+// ============================================================
+function openSparePartForm(id) {
+    if(id && !canEdit()){alert('没有编辑权限');return;}
+    document.getElementById('spare-id').value = '';
+    ['spare-name','spare-spec','spare-machine','spare-machine-model','spare-supplier'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('spare-stock').value = 0;
+    if(id){
+        const r = spareParts.find(x => x.id === id);
+        if(!r) return;
+        document.getElementById('spare-id').value = r.id;
+        document.getElementById('spare-name').value = r.name || '';
+        document.getElementById('spare-spec').value = r.spec || '';
+        document.getElementById('spare-machine').value = r.machine || '';
+        document.getElementById('spare-machine-model').value = r.machineModel || '';
+        document.getElementById('spare-supplier').value = r.supplier || '';
+        document.getElementById('spare-stock').value = r.stock || 0;
+        document.getElementById('spare-modal-title').textContent = '编辑备件';
+    } else {
+        document.getElementById('spare-modal-title').textContent = '新增备件';
+    }
+    openModal('modal-spare-part');
+}
+
+function saveSparePart() {
+    const name = document.getElementById('spare-name').value.trim();
+    if(!name){alert('请输入备件名称');return;}
+    const data = {
+        name,
+        spec: document.getElementById('spare-spec').value.trim(),
+        machine: document.getElementById('spare-machine').value.trim(),
+        machineModel: document.getElementById('spare-machine-model').value.trim(),
+        supplier: document.getElementById('spare-supplier').value.trim(),
+        stock: Number(document.getElementById('spare-stock').value) || 0
+    };
+    const editId = document.getElementById('spare-id').value;
+    if(editId){
+        const i = spareParts.findIndex(x => x.id === editId);
+        if(i >= 0) Object.assign(spareParts[i], data);
+    } else {
+        data.id = uid();
+        spareParts.push(data);
+    }
+    persistSpareParts();
+    closeModal('modal-spare-part');
+    renderSparePartsTable();
+}
+
+function deleteSparePart(id) {
+    showConfirm('确认删除该备件？', () => {
+        spareParts = spareParts.filter(x => x.id !== id);
+        persistSpareParts();
+        renderSparePartsTable();
+    });
+}
+
+function renderSparePartsTable() {
+    const kw = (document.getElementById('spare-search')?.value || '').trim().toLowerCase();
+    const list = spareParts.filter(r => !kw ||
+        (r.name || '').toLowerCase().includes(kw) ||
+        (r.machine || '').toLowerCase().includes(kw)
+    );
+    const tbody = document.getElementById('spare-parts-tbody');
+    if(list.length === 0){
+        tbody.innerHTML = '<tr><td colspan="7" class="table-empty">暂无备件数据</td></tr>';
+        return;
+    }
+    tbody.innerHTML = list.map(r => `
+        <tr>
+            <td><strong>${escapeHtml(r.name||'')}</strong></td>
+            <td>${escapeHtml(r.spec||'—')}</td>
+            <td>${escapeHtml(r.machine||'—')}</td>
+            <td>${escapeHtml(r.machineModel||'—')}</td>
+            <td>${escapeHtml(r.supplier||'—')}</td>
+            <td style="font-weight:600;">${r.stock||0}</td>
+            <td style="white-space:nowrap;">
+                ${canEdit() ? `<button class="btn-icon" title="编辑" onclick="openSparePartForm('${r.id}')">✏</button>` : ''}
+                ${canEdit() ? `<button class="btn-icon danger" title="删除" onclick="deleteSparePart('${r.id}')">🗑</button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+    applyPermissions();
+}
+
 // ============================================================
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
