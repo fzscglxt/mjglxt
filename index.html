@@ -2019,6 +2019,15 @@
         </div>
         <div class="modal-body">
             <input type="hidden" id="usage-id">
+            <div class="form-group">
+                <label>记录类型 *</label>
+                <select id="usage-record-type" onchange="onUsageTypeChange()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                    <option value="mold">模具/工装出入库</option>
+                    <option value="spare">备件出入库</option>
+                </select>
+            </div>
+            <!-- 模具/工装出入库字段 -->
+            <div id="usage-mold-fields">
             <div class="form-row">
                 <div class="form-group">
                     <label>模具/工装 *</label>
@@ -2056,6 +2065,48 @@
                     <label>操作员</label>
                     <input type="text" id="usage-operator" placeholder="操作员姓名">
                 </div>
+            </div>
+            </div>
+            <!-- 备件出入库字段 -->
+            <div id="usage-spare-fields" style="display:none;">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>备件类别 *</label>
+                    <select id="usage-spare-cat" onchange="onSpareCatChange()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                        <option value="mold">模具备件</option>
+                        <option value="fixture">工装备件</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>出入库方向 *</label>
+                    <select id="usage-spare-direction" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                        <option value="in">入库（增加库存）</option>
+                        <option value="out">出库（领用）</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>选择备件 *</label>
+                    <select id="usage-spare-id" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                        <option value="">-- 请选择备件 --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>数量 *</label>
+                    <input type="number" id="usage-spare-qty" min="1" value="1">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>日期 *</label>
+                    <input type="date" id="usage-spare-date">
+                </div>
+                <div class="form-group">
+                    <label>领用人</label>
+                    <input type="text" id="usage-spare-operator" placeholder="领用人姓名">
+                </div>
+            </div>
             </div>
             <div class="form-group">
                 <label>备注</label>
@@ -5859,6 +5910,21 @@ function _updateUsageMoldActive(newIdx) {
     bind();
 })();
 
+function onUsageTypeChange() {
+    const t = document.getElementById('usage-record-type').value;
+    document.getElementById('usage-mold-fields').style.display = (t === 'mold') ? '' : 'none';
+    document.getElementById('usage-spare-fields').style.display = (t === 'spare') ? '' : 'none';
+    if (t === 'spare') onSpareCatChange();
+}
+
+function onSpareCatChange() {
+    const cat = document.getElementById('usage-spare-cat').value;
+    const sel = document.getElementById('usage-spare-id');
+    const list = (cat === 'mold') ? spareParts : fixtureSpareParts;
+    sel.innerHTML = '<option value="">-- 请选择备件 --</option>' +
+        list.map(s => `<option value="${s.id}">${escapeHtml(s.name)}（${escapeHtml(s.spec||'')}）当前库存:${s.stock||0}</option>`).join('');
+}
+
 function openUsageForm(id) {
     if (molds.length === 0 && fixtures.length === 0) { alert('请先添加模具或工装'); return; }
     // 初始化模具可搜索下拉组件
@@ -5868,19 +5934,33 @@ function openUsageForm(id) {
     document.getElementById('usage-shots').value = 0;
     document.getElementById('usage-duration').value = 0;
     document.getElementById('usage-date').value = today();
+    document.getElementById('usage-record-type').value = 'mold';
+    onUsageTypeChange();
 
     if (id) {
         const r = usageRecords.find(r => r.id === id);
         if (r) {
             document.getElementById('usage-id').value = r.id;
-            // 编辑回显：只填充显示文本和隐藏值，不触发机台覆盖
-            setUsageMoldById(r.moldId, r.targetType || 'mold');
-            document.getElementById('usage-date').value = r.date;
-            document.getElementById('usage-machine').value = r.machine || '';
-            document.getElementById('usage-shots').value = r.shots || 0;
-            document.getElementById('usage-duration').value = r.duration || 0;
-            document.getElementById('usage-operator').value = r.operator || '';
-            document.getElementById('usage-notes').value = r.notes || '';
+            if (r.recordType === 'spare') {
+                document.getElementById('usage-record-type').value = 'spare';
+                onUsageTypeChange();
+                document.getElementById('usage-spare-cat').value = r.spareCat || 'mold';
+                onSpareCatChange();
+                document.getElementById('usage-spare-id').value = r.spareId || '';
+                document.getElementById('usage-spare-direction').value = r.spareDirection || 'out';
+                document.getElementById('usage-spare-qty').value = r.spareQty || 1;
+                document.getElementById('usage-spare-date').value = r.date || today();
+                document.getElementById('usage-spare-operator').value = r.operator || '';
+            } else {
+                // 编辑回显：只填充显示文本和隐藏值，不触发机台覆盖
+                setUsageMoldById(r.moldId, r.targetType || 'mold');
+                document.getElementById('usage-date').value = r.date;
+                document.getElementById('usage-machine').value = r.machine || '';
+                document.getElementById('usage-shots').value = r.shots || 0;
+                document.getElementById('usage-duration').value = r.duration || 0;
+                document.getElementById('usage-operator').value = r.operator || '';
+                document.getElementById('usage-notes').value = r.notes || '';
+            }
         }
     }
     document.getElementById('usage-modal-title').textContent = id ? '编辑出入库记录' : '新增出入库记录';
@@ -5903,50 +5983,100 @@ function updateUsageMoldInfo() {
 }
 
 function saveUsage() {
-    const moldId = document.getElementById('usage-mold').value;
-    const targetType = document.getElementById('usage-target-type')?.value || 'mold';
-    const date = document.getElementById('usage-date').value;
-    const shots = parseInt(document.getElementById('usage-shots').value) || 0;
-    if (!moldId) { alert('请选择模具或工装'); return; }
-    if (!date) { alert('请选择日期'); return; }
-    if (shots < 0) { alert('模次不能为负'); return; }
-
+    const recordType = document.getElementById('usage-record-type').value;
     const id = document.getElementById('usage-id').value;
     const oldRecord = id ? usageRecords.find(r => r.id === id) : null;
-    const oldShots = oldRecord ? (oldRecord.shots || 0) : 0;
 
-    const data = {
-        moldId, targetType, date,
-        machine: document.getElementById('usage-machine').value.trim(),
-        shots,
-        duration: parseFloat(document.getElementById('usage-duration').value) || 0,
-        operator: document.getElementById('usage-operator').value.trim(),
-        notes: document.getElementById('usage-notes').value.trim()
-    };
+    if (recordType === 'spare') {
+        // 备件出入库
+        const spareCat = document.getElementById('usage-spare-cat').value;
+        const spareId = document.getElementById('usage-spare-id').value;
+        const direction = document.getElementById('usage-spare-direction').value;
+        const qty = parseInt(document.getElementById('usage-spare-qty').value) || 0;
+        const date = document.getElementById('usage-spare-date').value;
+        const operator = document.getElementById('usage-spare-operator').value.trim();
+        if (!spareId) { alert('请选择备件'); return; }
+        if (!date) { alert('请选择日期'); return; }
+        if (qty <= 0) { alert('数量必须大于0'); return; }
 
-    if (id) {
-        const idx = usageRecords.findIndex(r => r.id === id);
-        if (idx >= 0) usageRecords[idx] = {...usageRecords[idx], ...data};
-    } else {
-        data.id = uid();
-        usageRecords.push(data);
-    }
+        const list = (spareCat === 'mold') ? spareParts : fixtureSpareParts;
+        const spare = list.find(s => s.id === spareId);
+        if (!spare) { alert('备件不存在'); return; }
 
-    // 更新模具/工装的累计模次
-    if (targetType === 'fixture') {
-        const fixture = fixtures.find(f => f.id === moldId);
-        if (fixture) {
-            fixture.shots = (fixture.shots || 0) - oldShots + shots;
-            persistFixtures();
+        // 出库检查库存
+        if (direction === 'out' && (spare.stock || 0) < qty) {
+            alert(`库存不足！当前库存 ${spare.stock || 0}，申请出库 ${qty}`); return;
         }
+
+        // 计算库存变化（编辑时先回退旧记录）
+        let delta = (direction === 'out') ? -qty : qty;
+        if (oldRecord && oldRecord.recordType === 'spare' && oldRecord.spareId === spareId) {
+            // 回退旧记录的影响
+            const oldDelta = (oldRecord.spareDirection === 'out') ? -oldRecord.spareQty : oldRecord.spareQty;
+            spare.stock = (spare.stock || 0) - oldDelta;
+        }
+        // 应用新记录
+        spare.stock = (spare.stock || 0) + delta;
+
+        const data = {
+            recordType: 'spare',
+            spareCat, spareId, spareDirection: direction, spareQty: qty,
+            date, operator,
+            notes: document.getElementById('usage-notes').value.trim()
+        };
+        if (id) {
+            const idx = usageRecords.findIndex(r => r.id === id);
+            if (idx >= 0) usageRecords[idx] = {...usageRecords[idx], ...data};
+        } else {
+            data.id = uid();
+            usageRecords.push(data);
+        }
+        if (spareCat === 'mold') persistSpareParts(); else persistFixtureSpareParts();
     } else {
-        const mold = getMoldById(moldId);
-        if (mold) {
-            mold.shots = (mold.shots || 0) - oldShots + shots;
-            if (lifePercent(mold) >= 80 && mold.status === '正常') {
-                mold.status = '待保养';
+        // 模具/工装出入库（原有逻辑）
+        const moldId = document.getElementById('usage-mold').value;
+        const targetType = document.getElementById('usage-target-type')?.value || 'mold';
+        const date = document.getElementById('usage-date').value;
+        const shots = parseInt(document.getElementById('usage-shots').value) || 0;
+        if (!moldId) { alert('请选择模具或工装'); return; }
+        if (!date) { alert('请选择日期'); return; }
+        if (shots < 0) { alert('模次不能为负'); return; }
+
+        const oldShots = oldRecord ? (oldRecord.shots || 0) : 0;
+        const data = {
+            recordType: 'mold',
+            moldId, targetType, date,
+            machine: document.getElementById('usage-machine').value.trim(),
+            shots,
+            duration: parseFloat(document.getElementById('usage-duration').value) || 0,
+            operator: document.getElementById('usage-operator').value.trim(),
+            notes: document.getElementById('usage-notes').value.trim()
+        };
+
+        if (id) {
+            const idx = usageRecords.findIndex(r => r.id === id);
+            if (idx >= 0) usageRecords[idx] = {...usageRecords[idx], ...data};
+        } else {
+            data.id = uid();
+            usageRecords.push(data);
+        }
+
+        // 更新模具/工装的累计模次
+        if (targetType === 'fixture') {
+            const fixture = fixtures.find(f => f.id === moldId);
+            if (fixture) {
+                fixture.shots = (fixture.shots || 0) - oldShots + shots;
+                persistFixtures();
             }
-            persistMolds();
+        } else {
+            const mold = getMoldById(moldId);
+            if (mold) {
+                mold.shots = (mold.shots || 0) - oldShots + shots;
+                if (lifePercent(mold) >= 80 && mold.status === '正常') {
+                    mold.status = '待保养';
+                }
+                persistMolds();
+            }
         }
     }
 
@@ -5957,21 +6087,32 @@ function saveUsage() {
 }
 
 function deleteUsage(id) {
-    showConfirm('确认删除该出入库记录？模具/工装累计模次将回退。', () => {
+    showConfirm('确认删除该出入库记录？库存/模次将回退。', () => {
         const r = usageRecords.find(r => r.id === id);
         if (r) {
-            const targetType = r.targetType || 'mold';
-            if (targetType === 'fixture') {
-                const fixture = fixtures.find(f => f.id === r.moldId);
-                if (fixture) {
-                    fixture.shots = Math.max(0, (fixture.shots||0) - (r.shots||0));
-                    persistFixtures();
+            if (r.recordType === 'spare') {
+                // 备件记录：回退库存
+                const list = (r.spareCat === 'mold') ? spareParts : fixtureSpareParts;
+                const spare = list.find(s => s.id === r.spareId);
+                if (spare) {
+                    const delta = (r.spareDirection === 'out') ? r.spareQty : -r.spareQty;
+                    spare.stock = Math.max(0, (spare.stock||0) + delta);
+                    if (r.spareCat === 'mold') persistSpareParts(); else persistFixtureSpareParts();
                 }
             } else {
-                const mold = getMoldById(r.moldId);
-                if (mold) {
-                    mold.shots = Math.max(0, (mold.shots||0) - (r.shots||0));
-                    persistMolds();
+                const targetType = r.targetType || 'mold';
+                if (targetType === 'fixture') {
+                    const fixture = fixtures.find(f => f.id === r.moldId);
+                    if (fixture) {
+                        fixture.shots = Math.max(0, (fixture.shots||0) - (r.shots||0));
+                        persistFixtures();
+                    }
+                } else {
+                    const mold = getMoldById(r.moldId);
+                    if (mold) {
+                        mold.shots = Math.max(0, (mold.shots||0) - (r.shots||0));
+                        persistMolds();
+                    }
                 }
             }
         }
@@ -5986,6 +6127,12 @@ function renderUsageTable() {
     const search = document.getElementById('usage-search').value.toLowerCase();
 
     let filtered = usageRecords.filter(r => {
+        if (r.recordType === 'spare') {
+            const list = (r.spareCat === 'mold') ? spareParts : fixtureSpareParts;
+            const spare = list.find(s => s.id === r.spareId);
+            if (search && !(spare?.name||'').toLowerCase().includes(search)) return false;
+            return true;
+        }
         const targetType = r.targetType || 'mold';
         const mold = targetType === 'fixture'
             ? fixtures.find(f => f.id === r.moldId)
@@ -6000,6 +6147,33 @@ function renderUsageTable() {
     }
 
     tbody.innerHTML = filtered.map(r => {
+        if (r.recordType === 'spare') {
+            // 备件出入库记录
+            const list = (r.spareCat === 'mold') ? spareParts : fixtureSpareParts;
+            const spare = list.find(s => s.id === r.spareId);
+            const dirTag = r.spareDirection === 'in'
+                ? '<span style="display:inline-block;padding:1px 5px;background:#34a853;color:#fff;border-radius:3px;font-size:10px;">入库</span>'
+                : '<span style="display:inline-block;padding:1px 5px;background:#ea4335;color:#fff;border-radius:3px;font-size:10px;">出库</span>';
+            const catTag = r.spareCat === 'mold'
+                ? '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;">模具备件</span>'
+                : '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;">工装备件</span>';
+            return `<tr>
+                <td>${r.date}</td>
+                <td><strong>${catTag}${dirTag}</strong></td>
+                <td>${escapeHtml(spare?.name||'已删除')}</td>
+                <td>—</td>
+                <td>${r.spareDirection === 'out' ? '-' : '+'}${r.spareQty||0}</td>
+                <td>${spare ? (spare.stock||0) : '—'}</td>
+                <td>—</td>
+                <td>${escapeHtml(r.operator||'—')}</td>
+                <td title="${escapeHtml(r.notes||'')}">${escapeHtml(r.notes ? (r.notes.length > 15 ? r.notes.slice(0,15)+'...' : r.notes) : '—')}</td>
+                <td style="white-space:nowrap">
+                    ${canEdit() ? `<button class="btn-icon" title="编辑" onclick="openUsageForm('${r.id}')">✏</button>` : ''}
+                    ${canEdit() ? `<button class="btn-icon danger" title="删除" onclick="deleteUsage('${r.id}')">🗑</button>` : ''}
+                </td>
+            </tr>`;
+        }
+        // 模具/工装出入库记录
         const targetType = r.targetType || 'mold';
         const mold = targetType === 'fixture'
             ? fixtures.find(f => f.id === r.moldId)
