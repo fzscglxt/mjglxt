@@ -1189,13 +1189,13 @@
             </div>
             <div style="padding:20px;">
                 <div style="display:flex;gap:12px;margin-bottom:16px;">
-                    <input type="text" id="spare-search" placeholder="搜索备件名称 / 适用机台..." style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:6px;" oninput="renderSparePartsTable()">
+                    <input type="text" id="spare-search" placeholder="搜索备件名称 / 适用模具..." style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:6px;" oninput="renderSparePartsTable()">
                 </div>
                 <div class="table-wrap">
                     <table>
                         <thead>
                             <tr>
-                                <th>备件名称</th><th>备件规格</th><th>适用机台</th><th>机台型号</th><th>供应商</th><th>库存</th><th>操作</th>
+                                <th>备件名称</th><th>备件规格</th><th>适用模具</th><th>模具型号</th><th>供应商</th><th>库存</th><th>操作</th>
                             </tr>
                         </thead>
                         <tbody id="spare-parts-tbody"></tbody>
@@ -1215,8 +1215,8 @@
                     <input type="hidden" id="spare-id">
                     <div class="form-group"><label>备件名称 *</label><input type="text" id="spare-name" required></div>
                     <div class="form-group"><label>备件规格</label><input type="text" id="spare-spec"></div>
-                    <div class="form-group"><label>适用机台</label><input type="text" id="spare-machine"></div>
-                    <div class="form-group"><label>机台型号</label><input type="text" id="spare-machine-model"></div>
+                    <div class="form-group"><label>适用模具</label><input type="text" id="spare-machine"></div>
+                    <div class="form-group"><label>模具型号</label><input type="text" id="spare-machine-model"></div>
                     <div class="form-group"><label>供应商</label><input type="text" id="spare-supplier"></div>
                     <div class="form-group"><label>库存数量</label><input type="number" id="spare-stock" min="0" value="0"></div>
                 </div>
