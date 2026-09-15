@@ -1024,6 +1024,9 @@
             <div class="nav-item" data-page="fixtures">
                 <span class="icon">🧰</span><span>工装台账</span>
             </div>
+            <div class="nav-item" data-page="fixture-spare-parts">
+                <span class="icon">🧰</span><span>工装备件清单</span>
+            </div>
             <div class="nav-item" data-page="maintenance-plan">
                 <span class="icon">📅</span><span>保养计划</span>
             </div>
@@ -1195,7 +1198,7 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>备件名称</th><th>备件规格</th><th>适用模具</th><th>模具型号</th><th>供应商</th><th>库存</th><th>操作</th>
+                                <th>备件名称</th><th>备件规格</th><th>适用模具</th><th>模具编号</th><th>供应商</th><th>库存</th><th>操作</th>
                             </tr>
                         </thead>
                         <tbody id="spare-parts-tbody"></tbody>
@@ -1216,7 +1219,7 @@
                     <div class="form-group"><label>备件名称 *</label><input type="text" id="spare-name" required></div>
                     <div class="form-group"><label>备件规格</label><input type="text" id="spare-spec"></div>
                     <div class="form-group"><label>适用模具</label><input type="text" id="spare-machine"></div>
-                    <div class="form-group"><label>模具型号</label><input type="text" id="spare-machine-model"></div>
+                    <div class="form-group"><label>模具编号</label><input type="text" id="spare-machine-model"></div>
                     <div class="form-group"><label>供应商</label><input type="text" id="spare-supplier"></div>
                     <div class="form-group"><label>库存数量</label><input type="number" id="spare-stock" min="0" value="0"></div>
                 </div>
@@ -1267,6 +1270,54 @@
                         </table>
                     </div>
                     <div id="fixture-pagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ Fixture Spare Parts Page ============ -->
+        <div class="page" id="page-fixture-spare-parts">
+            <div class="topbar">
+                <h1>🧰 工装备件清单</h1>
+                <div class="topbar-actions">
+                    <button class="btn btn-primary" data-need-edit onclick="openFixtureSparePartForm()">➕ 新增备件</button>
+                </div>
+            </div>
+            <div style="padding:20px;">
+                <div style="display:flex;gap:12px;margin-bottom:16px;">
+                    <input type="text" id="fixture-spare-search" placeholder="搜索备件名称 / 适用工装..." style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:6px;" oninput="renderFixtureSparePartsTable()">
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>备件名称</th><th>备件规格</th><th>适用工装</th><th>工装编号</th><th>供应商</th><th>库存</th><th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fixture-spare-parts-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工装备件新增/编辑弹窗 -->
+        <div class="modal-overlay" id="modal-fixture-spare-part">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="fixture-spare-modal-title">新增备件</h3>
+                    <button class="modal-close" onclick="closeModal('modal-fixture-spare-part')">×</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="fixture-spare-id">
+                    <div class="form-group"><label>备件名称 *</label><input type="text" id="fixture-spare-name" required></div>
+                    <div class="form-group"><label>备件规格</label><input type="text" id="fixture-spare-spec"></div>
+                    <div class="form-group"><label>适用工装</label><input type="text" id="fixture-spare-machine"></div>
+                    <div class="form-group"><label>工装编号</label><input type="text" id="fixture-spare-machine-model"></div>
+                    <div class="form-group"><label>供应商</label><input type="text" id="fixture-spare-supplier"></div>
+                    <div class="form-group"><label>库存数量</label><input type="number" id="fixture-spare-stock" min="0" value="0"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline" onclick="closeModal('modal-fixture-spare-part')">取消</button>
+                    <button class="btn btn-primary" onclick="saveFixtureSparePart()">保存</button>
                 </div>
             </div>
         </div>
@@ -2575,6 +2626,7 @@ let repairRecords = loadData('repairs');
 let usageRecords = loadData('usage');
 let planRecords = loadData('plans');
 let spareParts = loadData('spareParts');
+let fixtureSpareParts = loadData('fixtureSpareParts');
 
 function persistMolds() { saveData('molds', molds); markDataDirty(); }
 function persistFixtures() { saveData('fixtures', fixtures); markDataDirty(); }
@@ -2583,6 +2635,7 @@ function persistRepairs() { saveData('repairs', repairRecords); markDataDirty();
 function persistUsage() { saveData('usage', usageRecords); markDataDirty(); }
 function persistPlans() { saveData('plans', planRecords); markDataDirty(); }
 function persistSpareParts() { saveData('spareParts', spareParts); markDataDirty(); }
+function persistFixtureSpareParts() { saveData('fixtureSpareParts', fixtureSpareParts); markDataDirty(); }
 
 // ============================================================
 //  用户与权限系统
@@ -3303,6 +3356,7 @@ function navigateTo(page) {
     }
     if (page === 'molds') renderMoldTable();
     if (page === 'spare-parts') renderSparePartsTable();
+    if (page === 'fixture-spare-parts') renderFixtureSparePartsTable();
     if (page === 'fixtures') renderFixtureTable();
     if (page === 'maintenance-plan') renderPlanTable();
     if (page === 'maintenance-records') {
@@ -3320,8 +3374,6 @@ document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => navigateTo(item.dataset.page));
 });
 
-// ============================================================
-//  Modal 管理
 // ============================================================
 //  模具备件清单
 // ============================================================
@@ -3401,6 +3453,91 @@ function renderSparePartsTable() {
             <td style="white-space:nowrap;">
                 ${canEdit() ? `<button class="btn-icon" title="编辑" onclick="openSparePartForm('${r.id}')">✏</button>` : ''}
                 ${canEdit() ? `<button class="btn-icon danger" title="删除" onclick="deleteSparePart('${r.id}')">🗑</button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+    applyPermissions();
+}
+
+// ============================================================
+//  工装备件清单
+// ============================================================
+function openFixtureSparePartForm(id) {
+    if(id && !canEdit()){alert('没有编辑权限');return;}
+    document.getElementById('fixture-spare-id').value = '';
+    ['fixture-spare-name','fixture-spare-spec','fixture-spare-machine','fixture-spare-machine-model','fixture-spare-supplier'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('fixture-spare-stock').value = 0;
+    if(id){
+        const r = fixtureSpareParts.find(x => x.id === id);
+        if(!r) return;
+        document.getElementById('fixture-spare-id').value = r.id;
+        document.getElementById('fixture-spare-name').value = r.name || '';
+        document.getElementById('fixture-spare-spec').value = r.spec || '';
+        document.getElementById('fixture-spare-machine').value = r.machine || '';
+        document.getElementById('fixture-spare-machine-model').value = r.machineModel || '';
+        document.getElementById('fixture-spare-supplier').value = r.supplier || '';
+        document.getElementById('fixture-spare-stock').value = r.stock || 0;
+        document.getElementById('fixture-spare-modal-title').textContent = '编辑备件';
+    } else {
+        document.getElementById('fixture-spare-modal-title').textContent = '新增备件';
+    }
+    openModal('modal-fixture-spare-part');
+}
+
+function saveFixtureSparePart() {
+    const name = document.getElementById('fixture-spare-name').value.trim();
+    if(!name){alert('请输入备件名称');return;}
+    const data = {
+        name,
+        spec: document.getElementById('fixture-spare-spec').value.trim(),
+        machine: document.getElementById('fixture-spare-machine').value.trim(),
+        machineModel: document.getElementById('fixture-spare-machine-model').value.trim(),
+        supplier: document.getElementById('fixture-spare-supplier').value.trim(),
+        stock: Number(document.getElementById('fixture-spare-stock').value) || 0
+    };
+    const editId = document.getElementById('fixture-spare-id').value;
+    if(editId){
+        const i = fixtureSpareParts.findIndex(x => x.id === editId);
+        if(i >= 0) Object.assign(fixtureSpareParts[i], data);
+    } else {
+        data.id = uid();
+        fixtureSpareParts.push(data);
+    }
+    persistFixtureSpareParts();
+    closeModal('modal-fixture-spare-part');
+    renderFixtureSparePartsTable();
+}
+
+function deleteFixtureSparePart(id) {
+    showConfirm('确认删除该备件？', () => {
+        fixtureSpareParts = fixtureSpareParts.filter(x => x.id !== id);
+        persistFixtureSpareParts();
+        renderFixtureSparePartsTable();
+    });
+}
+
+function renderFixtureSparePartsTable() {
+    const kw = (document.getElementById('fixture-spare-search')?.value || '').trim().toLowerCase();
+    const list = fixtureSpareParts.filter(r => !kw ||
+        (r.name || '').toLowerCase().includes(kw) ||
+        (r.machine || '').toLowerCase().includes(kw)
+    );
+    const tbody = document.getElementById('fixture-spare-parts-tbody');
+    if(list.length === 0){
+        tbody.innerHTML = '<tr><td colspan="7" class="table-empty">暂无备件数据</td></tr>';
+        return;
+    }
+    tbody.innerHTML = list.map(r => `
+        <tr>
+            <td><strong>${escapeHtml(r.name||'')}</strong></td>
+            <td>${escapeHtml(r.spec||'—')}</td>
+            <td>${escapeHtml(r.machine||'—')}</td>
+            <td>${escapeHtml(r.machineModel||'—')}</td>
+            <td>${escapeHtml(r.supplier||'—')}</td>
+            <td style="font-weight:600;">${r.stock||0}</td>
+            <td style="white-space:nowrap;">
+                ${canEdit() ? `<button class="btn-icon" title="编辑" onclick="openFixtureSparePartForm('${r.id}')">✏</button>` : ''}
+                ${canEdit() ? `<button class="btn-icon danger" title="删除" onclick="deleteFixtureSparePart('${r.id}')">🗑</button>` : ''}
             </td>
         </tr>
     `).join('');
