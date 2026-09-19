@@ -2056,6 +2056,13 @@
                     <label>机台</label>
                     <input type="text" id="usage-machine" placeholder="如：HT250T">
                 </div>
+                <div class="form-group">
+                    <label>出入库方向 *</label>
+                    <select id="usage-direction" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                        <option value="out">出库（上机使用）</option>
+                        <option value="in">入库（换下回库）</option>
+                    </select>
+                </div>
             </div>
             <div class="form-row-3">
                 <div class="form-group">
@@ -5969,6 +5976,9 @@ function openUsageForm(id) {
                 setUsageMoldById(r.moldId, r.targetType || 'mold');
                 document.getElementById('usage-date').value = r.date;
                 document.getElementById('usage-machine').value = r.machine || '';
+                if (document.getElementById('usage-direction')) {
+                    document.getElementById('usage-direction').value = r.direction || 'out';
+                }
                 document.getElementById('usage-shots').value = r.shots || 0;
                 document.getElementById('usage-duration').value = r.duration || 0;
                 document.getElementById('usage-operator').value = r.operator || '';
