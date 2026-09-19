@@ -1451,6 +1451,7 @@
             <div class="topbar">
                 <h1>⚙️ 出入库记录</h1>
                 <div class="topbar-actions">
+                    <button class="btn btn-outline" onclick="syncUsageFromProduction(true)" title="从生产管理系统拉取最新生产记录，按使用周期规则重建自动出入库">🔄 从生产记录同步</button>
                     <button class="btn btn-outline" onclick="exportUsageCSV()">📥 导出CSV</button>
                     <button class="btn btn-primary" data-need-edit onclick="openUsageForm()">➕ 新增出入库记录</button>
                 </div>
@@ -6068,7 +6069,8 @@ function saveUsage() {
             shots,
             duration: parseFloat(document.getElementById('usage-duration').value) || 0,
             operator: document.getElementById('usage-operator').value.trim(),
-            notes: document.getElementById('usage-notes').value.trim()
+            notes: document.getElementById('usage-notes').value.trim(),
+            manual: true
         };
 
         if (id) {
@@ -6138,6 +6140,162 @@ function deleteUsage(id) {
         persistUsage();
         renderUsageTable();
     });
+}
+
+// ============================================================
+// 出入库"使用周期"自动重建（与 functions/api/db.js 中算法保持一致）
+// 规则：①换模/换工装 → 旧件入库、新件出库；②连续生产周期首日出库、末日入库；
+//       ③生产日期断开（机台闲置）或数据结束 → 末日入库
+// ============================================================
+function _usageDayDiff(a, b) {
+    return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+}
+
+function buildAutoUsage(events, targetType, operatorName) {
+    const records = [];
+    const shiftOrder = { '白班': 0, '夜班': 1 };
+    const valid = (events || [])
+        .filter(e => e && e.date && e.machine && e.code)
+        .map(e => ({
+            recordId: String(e.recordId || ''),
+            date: String(e.date).slice(0, 10),
+            machine: String(e.machine),
+            code: String(e.code),
+            qty: Number(e.qty) || 0,
+            duration: Number(e.duration) || 0,
+            shift: e.shift || ''
+        }));
+
+    const byMachine = {};
+    valid.forEach(e => { (byMachine[e.machine] ||= []).push(e); });
+
+    let seq = 0;
+    Object.keys(byMachine).sort().forEach(machine => {
+        const list = byMachine[machine].sort((a, b) => {
+            if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+            const sa = (a.shift in shiftOrder) ? shiftOrder[a.shift] : 0;
+            const sb = (b.shift in shiftOrder) ? shiftOrder[b.shift] : 0;
+            if (sa !== sb) return sa - sb;
+            return a.recordId < b.recordId ? -1 : (a.recordId > b.recordId ? 1 : 0);
+        });
+
+        let cur = null;
+        const pushOut = (e) => {
+            records.push({
+                id: 'auto_' + targetType + '_' + machine + '_' + e.code + '_out_' + e.date + '_' + (seq++),
+                recordType: 'mold', moldId: e.code, targetType,
+                direction: 'out', date: e.date, machine,
+                shots: 0, duration: 0,
+                operator: operatorName, notes: '批量生产', auto: true
+            });
+        };
+        const closeCycle = () => {
+            if (!cur) return;
+            records.push({
+                id: 'auto_' + targetType + '_' + machine + '_' + cur.code + '_in_' + cur.startDate + '_' + cur.lastDate + '_' + (seq++),
+                recordType: 'mold', moldId: cur.code, targetType,
+                direction: 'in', date: cur.lastDate, machine,
+                shots: cur.shots, duration: Math.round(cur.duration * 10) / 10,
+                operator: operatorName, notes: '批量生产', auto: true
+            });
+            cur = null;
+        };
+        const openCycle = (e) => {
+            cur = { code: e.code, startDate: e.date, lastDate: e.date, shots: e.qty, duration: e.duration };
+            pushOut(e);
+        };
+
+        list.forEach(e => {
+            if (!cur) {
+                openCycle(e);
+            } else if (cur.code === e.code) {
+                const gap = _usageDayDiff(cur.lastDate, e.date);
+                if (gap >= 0 && gap <= 1) {
+                    cur.lastDate = e.date;
+                    cur.shots += e.qty;
+                    cur.duration += e.duration;
+                } else {
+                    closeCycle();
+                    openCycle(e);
+                }
+            } else {
+                closeCycle();
+                openCycle(e);
+            }
+        });
+        closeCycle();
+    });
+    return records;
+}
+
+// 用生产事件在前端重建自动出入库（保留备件记录与手动记录），并重算台账累计模次
+function rebuildUsageLocal(eventsMold, eventsFixture) {
+    const kept = usageRecords.filter(r => r.recordType === 'spare' || r.manual === true);
+    const autoMold = buildAutoUsage(eventsMold, 'mold', '孙文敬');
+    const autoFixture = buildAutoUsage(eventsFixture, 'fixture', '钟意');
+    usageRecords = kept.concat(autoMold).concat(autoFixture);
+
+    const sumIn = (code) => usageRecords
+        .filter(r => r.recordType === 'mold' && r.moldId === code && r.direction === 'in')
+        .reduce((s, r) => s + (Number(r.shots) || 0), 0);
+    molds.forEach(m => { if (m.code) m.shots = sumIn(m.code); });
+    fixtures.forEach(f => { if (f.code) f.shots = sumIn(f.code); });
+
+    persistUsage();
+    try { persistMolds(); } catch (e) {}
+    try { persistFixtures(); } catch (e) {}
+    return { mold: autoMold.length, fixture: autoFixture.length, kept: kept.length };
+}
+
+// 从生产管理系统拉取全量生产记录并重建出入库
+// manualSave=true 时重建后立即保存到云端（用户点击按钮触发）
+async function syncUsageFromProduction(manualSave) {
+    try {
+        const res = await fetch('https://fz-production-mgmt.pages.dev/api/db', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const j = await res.json();
+        const pdb = j && j.db;
+        if (!pdb) throw new Error('生产系统无数据');
+
+        const toEvents = (arr, codeField) => (arr || [])
+            .filter(r => r && r[codeField] && r.machineNo && r.date)
+            .map(r => ({
+                recordId: r.id,
+                date: String(r.date).slice(0, 10),
+                machine: r.machineNo,
+                code: r[codeField],
+                productName: r.productName || '',
+                qty: Number(r.produceQty) || 0,
+                duration: Number(r.actualHours) || 0,
+                shift: r.shift || ''
+            }));
+
+        const evMold = toEvents(pdb.injection, 'moldNo');
+        const evFixture = toEvents(pdb.assembly, 'toolingNo');
+        const stats = rebuildUsageLocal(evMold, evFixture);
+
+        try { renderUsageTable(); } catch (e) {}
+        try { renderMoldTable(); } catch (e) {}
+        try { renderFixtureTable(); } catch (e) {}
+        try { renderAll(); } catch (e) {}
+
+        const msg = '同步完成：模具出入库' + stats.mold + '条、工装出入库' + stats.fixture + '条（保留手动/备件记录' + stats.kept + '条）';
+        if (manualSave) {
+            if (typeof showToast === 'function') showToast('📝 ' + msg + '，正在保存到云端...', 'info');
+            const ok = await cloudSync.push();
+            if (ok) { if (typeof showToast === 'function') showToast('✅ 生产记录已同步并保存', 'success'); }
+            else if (typeof showToast === 'function') showToast('⚠️ 本地已重建，云端保存冲突或失败，请点页面「保存」按钮', 'warning');
+        } else if (typeof showToast === 'function') {
+            showToast('📝 ' + msg + '，请点「保存」按钮同步云端', 'info');
+        }
+        return stats;
+    } catch (e) {
+        console.warn('syncUsageFromProduction error', e);
+        if (manualSave && typeof showToast === 'function') {
+            showToast('❌ 同步失败：' + (e && e.message ? e.message : e), 'error');
+        }
+        return null;
+    }
 }
 
 function renderUsageTable() {
