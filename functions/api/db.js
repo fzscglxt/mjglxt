@@ -70,109 +70,114 @@ function dayDiff(a, b) {
 /**
  * 根据一个类型（mold模具 / fixture工装）的全量生产事件，生成自动出入库记录
  * 事件字段：{ recordId, date, machine, code, productName, qty, duration, shift }
- * 同一机台：
- *   - 同一编号且生产日期连续（相邻≤1天，含同日）→ 同一周期，累加模次/时长
- *   - 换编号（换模/换工装）→ 旧件末日入库、新件当日出库
- *   - 生产日期断开（间隔>1天，机台闲置）→ 旧件末日入库，再生产时重新出库
- *   - 数据末尾仍在机台的件 → 最后使用日入库
+ *
+ * 模型：按 (机台, 模具/工装编号) 二元组独立计算连续使用日期段
+ *   - 同一机台同一编号，生产日期相邻≤1天（含同日）合并为一个使用周期，
+ *     周期首日出库（模次/时长为0）、末日入库（模次/时长为整周期合计）
+ *   - 生产日期断开（间隔>1天，机台闲置）→ 末日入库，再生产时重新出库
+ *   - 同机台更换别的编号 → 旧编号在其最后生产日入库、新编号在其最早生产日出库
+ *   - 数据末尾仍在机台的编号 → 最后生产日入库
+ *   - 同一天同一机台即使录入了多个编号（按产品逐条录入），各编号按自身
+ *     连续日期段独立成周期，不被同日其他编号的录入顺序打散
  */
 function buildAutoUsage(events, targetType, operatorName) {
   const records = [];
-  const shiftOrder = { '白班': 0, '夜班': 1 };
   const valid = (events || [])
     .filter(e => e && e.date && e.machine && e.code)
     .map(e => ({
-      recordId: String(e.recordId || ''),
       date: String(e.date).slice(0, 10),
       machine: String(e.machine),
       code: String(e.code),
-      productName: e.productName || '',
       qty: Number(e.qty) || 0,
-      duration: Number(e.duration) || 0,
-      shift: e.shift || '',
+      duration: Number(e.duration) || 0
     }));
 
-  // 按机台分组
-  const byMachine = {};
+  // 按 (机台, 编号) 分组，并按日聚合模次/时长
+  const pairs = {};
   valid.forEach(e => {
-    if (!byMachine[e.machine]) byMachine[e.machine] = [];
-    byMachine[e.machine].push(e);
+    const key = e.machine + '|' + e.code;
+    if (!pairs[key]) pairs[key] = { machine: e.machine, code: e.code, byDate: {} };
+    const p = pairs[key];
+    if (!p.byDate[e.date]) p.byDate[e.date] = { qty: 0, duration: 0 };
+    p.byDate[e.date].qty += e.qty;
+    p.byDate[e.date].duration += e.duration;
   });
 
-  let seq = 0;
-  Object.keys(byMachine).sort().forEach(machine => {
-    const list = byMachine[machine].sort((a, b) => {
-      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-      const sa = (a.shift in shiftOrder) ? shiftOrder[a.shift] : 0;
-      const sb = (b.shift in shiftOrder) ? shiftOrder[b.shift] : 0;
-      if (sa !== sb) return sa - sb;
-      return a.recordId < b.recordId ? -1 : (a.recordId > b.recordId ? 1 : 0);
-    });
+  Object.keys(pairs).sort().forEach(key => {
+    const p = pairs[key];
+    const dates = Object.keys(p.byDate).sort();
+    let segStart = null;
+    let segPrev = null;
+    let segShots = 0;
+    let segDuration = 0;
 
-    let cur = null;
-
-    const pushOut = (e) => {
+    const openSeg = (date) => {
+      segStart = date; segPrev = date; segShots = 0; segDuration = 0;
       records.push({
-        id: `auto_${targetType}_${machine}_${e.code}_out_${e.date}_${seq++}`,
+        id: `auto_${targetType}_${p.machine}_${p.code}_out_${date}`,
         recordType: 'mold',
-        moldId: e.code,
+        moldId: p.code,
         targetType,
         direction: 'out',
-        date: e.date,
-        machine,
+        date,
+        machine: p.machine,
         shots: 0,
         duration: 0,
         operator: operatorName,
         notes: '批量生产',
-        auto: true,
+        auto: true
       });
     };
-    const closeCycle = () => {
-      if (!cur) return;
+    const closeSeg = (endDate, shots, duration) => {
       records.push({
-        id: `auto_${targetType}_${machine}_${cur.code}_in_${cur.startDate}_${cur.lastDate}_${seq++}`,
+        id: `auto_${targetType}_${p.machine}_${p.code}_in_${segStart}_${endDate}`,
         recordType: 'mold',
-        moldId: cur.code,
+        moldId: p.code,
         targetType,
         direction: 'in',
-        date: cur.lastDate,
-        machine,
-        shots: cur.shots,
-        duration: Math.round(cur.duration * 10) / 10,
+        date: endDate,
+        machine: p.machine,
+        shots,
+        duration: Math.round(duration * 10) / 10,
         operator: operatorName,
         notes: '批量生产',
-        auto: true,
+        auto: true
       });
-      cur = null;
-    };
-    const openCycle = (e) => {
-      cur = { code: e.code, startDate: e.date, lastDate: e.date, shots: e.qty, duration: e.duration };
-      pushOut(e);
     };
 
-    list.forEach(e => {
-      if (!cur) {
-        openCycle(e);
-      } else if (cur.code === e.code) {
-        const gap = dayDiff(cur.lastDate, e.date);
-        if (gap >= 0 && gap <= 1) {
-          // 同日或次日连续生产：延续周期
-          cur.lastDate = e.date;
-          cur.shots += e.qty;
-          cur.duration += e.duration;
-        } else {
-          // 日期断开（机台闲置）：旧周期入库，重新出库
-          closeCycle();
-          openCycle(e);
-        }
+    dates.forEach((date, idx) => {
+      const day = p.byDate[date];
+      if (segStart === null) {
+        openSeg(date);
+        segShots = day.qty;
+        segDuration = day.duration;
+        segPrev = date;
       } else {
-        // 换模/换工装：旧件入库（最后使用日），新件出库（当日）
-        closeCycle();
-        openCycle(e);
+        const gap = dayDiff(segPrev, date);
+        if (gap >= 0 && gap <= 1) {
+          // 连续生产：延续周期
+          segShots += day.qty;
+          segDuration += day.duration;
+          segPrev = date;
+        } else {
+          // 日期间断（机台闲置）：旧周期入库，新周期出库
+          closeSeg(segPrev, segShots, segDuration);
+          openSeg(date);
+          segShots = day.qty;
+          segDuration = day.duration;
+          segPrev = date;
+        }
       }
     });
-    // 数据末尾：仍在机台的件入库（机台闲置）
-    closeCycle();
+    // 末尾闭合（机台闲置）
+    if (segStart !== null) closeSeg(segPrev, segShots, segDuration);
+  });
+
+  // 统一按日期排序，同日出库排在入库前
+  records.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.direction !== b.direction) return a.direction === 'out' ? -1 : 1;
+    return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
   });
 
   return records;

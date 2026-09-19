@@ -6153,77 +6153,75 @@ function _usageDayDiff(a, b) {
 
 function buildAutoUsage(events, targetType, operatorName) {
     const records = [];
-    const shiftOrder = { '白班': 0, '夜班': 1 };
     const valid = (events || [])
         .filter(e => e && e.date && e.machine && e.code)
         .map(e => ({
-            recordId: String(e.recordId || ''),
             date: String(e.date).slice(0, 10),
             machine: String(e.machine),
             code: String(e.code),
             qty: Number(e.qty) || 0,
-            duration: Number(e.duration) || 0,
-            shift: e.shift || ''
+            duration: Number(e.duration) || 0
         }));
 
-    const byMachine = {};
-    valid.forEach(e => { (byMachine[e.machine] ||= []).push(e); });
+    // 按 (机台, 编号) 分组，并按日聚合模次/时长
+    const pairs = {};
+    valid.forEach(e => {
+        const key = e.machine + '|' + e.code;
+        if (!pairs[key]) pairs[key] = { machine: e.machine, code: e.code, byDate: {} };
+        const p = pairs[key];
+        if (!p.byDate[e.date]) p.byDate[e.date] = { qty: 0, duration: 0 };
+        p.byDate[e.date].qty += e.qty;
+        p.byDate[e.date].duration += e.duration;
+    });
 
-    let seq = 0;
-    Object.keys(byMachine).sort().forEach(machine => {
-        const list = byMachine[machine].sort((a, b) => {
-            if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-            const sa = (a.shift in shiftOrder) ? shiftOrder[a.shift] : 0;
-            const sb = (b.shift in shiftOrder) ? shiftOrder[b.shift] : 0;
-            if (sa !== sb) return sa - sb;
-            return a.recordId < b.recordId ? -1 : (a.recordId > b.recordId ? 1 : 0);
-        });
+    Object.keys(pairs).sort().forEach(key => {
+        const p = pairs[key];
+        const dates = Object.keys(p.byDate).sort();
+        let segStart = null, segPrev = null, segShots = 0, segDuration = 0;
 
-        let cur = null;
-        const pushOut = (e) => {
+        const openSeg = (date) => {
+            segStart = date; segPrev = date; segShots = 0; segDuration = 0;
             records.push({
-                id: 'auto_' + targetType + '_' + machine + '_' + e.code + '_out_' + e.date + '_' + (seq++),
-                recordType: 'mold', moldId: e.code, targetType,
-                direction: 'out', date: e.date, machine,
+                id: 'auto_' + targetType + '_' + p.machine + '_' + p.code + '_out_' + date,
+                recordType: 'mold', moldId: p.code, targetType,
+                direction: 'out', date, machine: p.machine,
                 shots: 0, duration: 0,
                 operator: operatorName, notes: '批量生产', auto: true
             });
         };
-        const closeCycle = () => {
-            if (!cur) return;
+        const closeSeg = (endDate, shots, duration) => {
             records.push({
-                id: 'auto_' + targetType + '_' + machine + '_' + cur.code + '_in_' + cur.startDate + '_' + cur.lastDate + '_' + (seq++),
-                recordType: 'mold', moldId: cur.code, targetType,
-                direction: 'in', date: cur.lastDate, machine,
-                shots: cur.shots, duration: Math.round(cur.duration * 10) / 10,
+                id: 'auto_' + targetType + '_' + p.machine + '_' + p.code + '_in_' + segStart + '_' + endDate,
+                recordType: 'mold', moldId: p.code, targetType,
+                direction: 'in', date: endDate, machine: p.machine,
+                shots, duration: Math.round(duration * 10) / 10,
                 operator: operatorName, notes: '批量生产', auto: true
             });
-            cur = null;
-        };
-        const openCycle = (e) => {
-            cur = { code: e.code, startDate: e.date, lastDate: e.date, shots: e.qty, duration: e.duration };
-            pushOut(e);
         };
 
-        list.forEach(e => {
-            if (!cur) {
-                openCycle(e);
-            } else if (cur.code === e.code) {
-                const gap = _usageDayDiff(cur.lastDate, e.date);
-                if (gap >= 0 && gap <= 1) {
-                    cur.lastDate = e.date;
-                    cur.shots += e.qty;
-                    cur.duration += e.duration;
-                } else {
-                    closeCycle();
-                    openCycle(e);
-                }
+        dates.forEach(date => {
+            const day = p.byDate[date];
+            if (segStart === null) {
+                openSeg(date);
+                segShots = day.qty; segDuration = day.duration; segPrev = date;
             } else {
-                closeCycle();
-                openCycle(e);
+                const gap = _usageDayDiff(segPrev, date);
+                if (gap >= 0 && gap <= 1) {
+                    segShots += day.qty; segDuration += day.duration; segPrev = date;
+                } else {
+                    closeSeg(segPrev, segShots, segDuration);
+                    openSeg(date);
+                    segShots = day.qty; segDuration = day.duration; segPrev = date;
+                }
             }
         });
-        closeCycle();
+        if (segStart !== null) closeSeg(segPrev, segShots, segDuration);
+    });
+
+    records.sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+        if (a.direction !== b.direction) return a.direction === 'out' ? -1 : 1;
+        return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
     });
     return records;
 }
