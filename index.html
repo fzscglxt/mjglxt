@@ -5942,12 +5942,14 @@ function onUsageDirChange() {
     const dir = document.getElementById('usage-direction').value;
     const shotsInput = document.getElementById('usage-shots');
     const durInput = document.getElementById('usage-duration');
-    if (dir === 'in') {
+    if (dir === 'out') {
+        // 出库：刚上机，模次和时长为0，锁定
         shotsInput.value = 0;
         durInput.value = 0;
         shotsInput.disabled = true;
         durInput.disabled = true;
     } else {
+        // 入库：换下旧件，填累计总生产数和总时长，可编辑
         shotsInput.disabled = false;
         durInput.disabled = false;
     }

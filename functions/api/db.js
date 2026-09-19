@@ -170,6 +170,25 @@ export async function onRequestPost(context) {
     const oldMoldLastDir = oldMoldRecords.length > 0 ? oldMoldRecords[0].direction : null;
 
     if (oldMoldLastDir !== 'in') {
+      // 计算这个旧模具从上次出库到本次入库之间累计生产总数量和总时长
+      let totalShots = 0;
+      let totalDuration = 0;
+      let lastOutIdx = -1;
+      for (let i = 0; i < oldMoldRecords.length; i++) {
+        if (oldMoldRecords[i].direction === 'out') {
+          lastOutIdx = i;
+          break;
+        }
+      }
+      // 从出库记录之后开始累加所有生产记录
+      for (let i = lastOutIdx - 1; i >= 0; i--) {
+        totalShots += oldMoldRecords[i].shots || 0;
+        totalDuration += oldMoldRecords[i].duration || 0;
+      }
+      // 加上本次生产的qty和duration
+      totalShots += qty || 0;
+      totalDuration += duration || 0;
+
       oldMoldInRecord = {
         id: uid(),
         recordType: 'mold',
@@ -178,8 +197,8 @@ export async function onRequestPost(context) {
         direction: 'in',
         date: date,
         machine: machineNo,
-        shots: 0,
-        duration: 0,
+        shots: totalShots,
+        duration: totalDuration,
         operator: operatorName,
         notes: '批量生产'
       };
@@ -203,8 +222,8 @@ export async function onRequestPost(context) {
       direction: 'out',
       date: date,
       machine: machineNo,
-      shots: qty || 0,
-      duration: duration || 0,
+      shots: 0,
+      duration: 0,
       operator: operatorName,
       notes: '批量生产'
     };
