@@ -1459,6 +1459,11 @@
                 <div class="panel-body">
                     <div class="filter-bar">
                         <div class="search-box"><input type="text" id="usage-search" placeholder="搜索模具编号..." oninput="renderUsageTable()"></div>
+                        <select id="usage-dir-filter" onchange="renderUsageTable()" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px">
+                            <option value="">全部类型</option>
+                            <option value="out">出库</option>
+                            <option value="in">入库</option>
+                        </select>
                     </div>
                     <div class="table-wrap">
                         <table>
@@ -6971,6 +6976,7 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
 
 
 
