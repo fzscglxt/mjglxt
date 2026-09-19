@@ -180,8 +180,8 @@ export async function onRequestPost(context) {
         machine: machineNo,
         shots: 0,
         duration: 0,
-        operator: '生产系统自动同步',
-        notes: `生产系统自动入库：机台${machineNo}切换${type === 'fixture' ? '工装' : '模具'}`
+        operator: operatorName,
+        notes: '批量生产'
       };
       db.usage.push(oldMoldInRecord);
     }
@@ -203,10 +203,10 @@ export async function onRequestPost(context) {
       direction: 'out',
       date: date,
       machine: machineNo,
-      shots: 0,
+      shots: qty || 0,
       duration: duration || 0,
-      operator: '生产系统自动同步',
-      notes: `生产系统自动出库：生产产品${productName || ''}，数量${qty || 0}`
+      operator: operatorName,
+      notes: '批量生产'
     };
     db.usage.push(newMoldOutRecord);
   }
