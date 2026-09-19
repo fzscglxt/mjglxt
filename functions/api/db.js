@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 模具管理系统 - 云端数据同步 API (Cloudflare Pages Functions)
  *
  * 接口规范：
@@ -138,6 +138,7 @@ export async function onRequestPost(context) {
 
   // 默认是模具，支持工装同步
   const type = targetType || 'mold';
+  const operatorName = type === 'fixture' ? '钟意' : '孙文敬';
 
   const current = await readData(kv);
   if (!current.db) {
@@ -227,3 +228,4 @@ export async function onRequestPost(context) {
     version: newVersion
   });
 }
+
