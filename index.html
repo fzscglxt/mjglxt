@@ -6145,6 +6145,8 @@ function renderUsageTable() {
             const nameText = (mold?.name || '').toLowerCase();
             if (!codeText.includes(search) && !nameText.includes(search)) return false;
         }
+        const dirFilter = document.getElementById('usage-dir-filter')?.value;
+        if (dirFilter && r.direction !== dirFilter) return false;
         return true;
     }).sort((a,b) => b.date.localeCompare(a.date));
 
@@ -6969,6 +6971,7 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
 
 
 
