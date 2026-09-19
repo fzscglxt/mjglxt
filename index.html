@@ -5241,12 +5241,8 @@ function renderMaintenanceTable() {
         const typeTag = targetType === 'fixture'
             ? '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">工装</span>'
             : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
-        const usageDirTag = r.direction === 'out'
-            ? '<span style="display:inline-block;padding:2px 8px;background:#34a853;color:#fff;border-radius:4px;font-size:12px">出库</span>'
-            : '<span style="display:inline-block;padding:2px 8px;background:#1a73e8;color:#fff;border-radius:4px;font-size:12px">入库</span>';
         return `<tr>
             <td>${r.date}</td>
-            <td>${usageDirTag}</td>
             <td><strong>${typeTag}${escapeHtml(mold?.code||'已删除')}</strong></td>
             <td>${escapeHtml(mold?.name||'—')}</td>
             <td>${r.type}</td>
@@ -5700,12 +5696,8 @@ function renderRepairTable() {
         const typeTag = targetType === 'fixture'
             ? '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">工装</span>'
             : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
-        const usageDirTag = r.direction === 'out'
-            ? '<span style="display:inline-block;padding:2px 8px;background:#34a853;color:#fff;border-radius:4px;font-size:12px">出库</span>'
-            : '<span style="display:inline-block;padding:2px 8px;background:#1a73e8;color:#fff;border-radius:4px;font-size:12px">入库</span>';
         return `<tr>
             <td>${r.date}</td>
-            <td>${usageDirTag}</td>
             <td><strong>${typeTag}${escapeHtml(mold?.code||'已删除')}</strong></td>
             <td>${escapeHtml(mold?.name||'—')}</td>
             <td title="${escapeHtml(r.fault)}">${escapeHtml(r.fault.length > 20 ? r.fault.slice(0,20)+'...' : r.fault)}</td>
@@ -5938,22 +5930,6 @@ function onSpareCatChange() {
         list.map(s => `<option value="${s.id}">${escapeHtml(s.name)}（${escapeHtml(s.spec||'')}）当前库存:${s.stock||0}</option>`).join('');
 }
 
-function onUsageDirChange() {
-    const dir = document.getElementById('usage-direction').value;
-    const shotsInput = document.getElementById('usage-shots');
-    const durInput = document.getElementById('usage-duration');
-    if (dir === 'out') {
-        // 出库：刚上机，模次和时长为0，锁定
-        shotsInput.value = 0;
-        durInput.value = 0;
-        shotsInput.disabled = true;
-        durInput.disabled = true;
-    } else {
-        // 入库：换下旧件，填累计总生产数和总时长，可编辑
-        shotsInput.disabled = false;
-        durInput.disabled = false;
-    }
-}
 function openUsageForm(id) {
     if (molds.length === 0 && fixtures.length === 0) { alert('请先添加模具或工装'); return; }
     // 初始化模具可搜索下拉组件
@@ -5962,11 +5938,8 @@ function openUsageForm(id) {
     ['usage-machine','usage-operator','usage-notes'].forEach(i => document.getElementById(i).value = '');
     document.getElementById('usage-shots').value = 0;
     document.getElementById('usage-duration').value = 0;
-    onUsageDirChange();
-    document.getElementById('usage-duration').value = 0;
     document.getElementById('usage-date').value = today();
     document.getElementById('usage-record-type').value = 'mold';
-    document.getElementById('usage-direction').value = 'out';
     onUsageTypeChange();
 
     if (id) {
@@ -5988,7 +5961,6 @@ function openUsageForm(id) {
                 setUsageMoldById(r.moldId, r.targetType || 'mold');
                 document.getElementById('usage-date').value = r.date;
                 document.getElementById('usage-machine').value = r.machine || '';
-            document.getElementById('usage-direction').value = r.direction || 'out';
                 document.getElementById('usage-shots').value = r.shots || 0;
                 document.getElementById('usage-duration').value = r.duration || 0;
                 document.getElementById('usage-operator').value = r.operator || '';
@@ -6077,7 +6049,7 @@ function saveUsage() {
 
         const oldShots = oldRecord ? (oldRecord.shots || 0) : 0;
         const data = {
-            recordType: 'mold', direction: document.getElementById('usage-direction').value,
+            recordType: 'mold',
             moldId, targetType, date,
             machine: document.getElementById('usage-machine').value.trim(),
             shots,
@@ -6226,12 +6198,8 @@ function renderUsageTable() {
         const typeTag = targetType === 'fixture'
             ? '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">工装</span>'
             : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
-        const usageDirTag = r.direction === 'out'
-            ? '<span style="display:inline-block;padding:2px 8px;background:#34a853;color:#fff;border-radius:4px;font-size:12px">出库</span>'
-            : '<span style="display:inline-block;padding:2px 8px;background:#1a73e8;color:#fff;border-radius:4px;font-size:12px">入库</span>';
         return `<tr>
             <td>${r.date}</td>
-            <td>${usageDirTag}</td>
             <td><strong>${typeTag}${escapeHtml(mold?.code||'已删除')}</strong></td>
             <td>${escapeHtml(mold?.name||'—')}</td>
             <td>${escapeHtml(r.machine||'—')}</td>
@@ -7008,7 +6976,6 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
-
 
 
 
