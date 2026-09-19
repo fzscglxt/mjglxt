@@ -6182,9 +6182,12 @@ function renderUsageTable() {
         }
         // 模具/工装出入库记录
         const targetType = r.targetType || 'mold';
-        const mold = targetType === 'fixture'
-            ? fixtures.find(f => f.id === r.moldId)
-            : getMoldById(r.moldId);
+        let mold = null;
+        if (targetType === 'fixture') {
+            mold = fixtures.find(f => f.id === r.moldId) || fixtures.find(f => f.code === r.moldId);
+        } else {
+            mold = getMoldById(r.moldId) || molds.find(m => m.code === r.moldId);
+        }
         const typeTag = targetType === 'fixture'
             ? '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">工装</span>'
             : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
@@ -6966,4 +6969,6 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
+
 
