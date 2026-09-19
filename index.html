@@ -6070,6 +6070,7 @@ function saveUsage() {
             recordType: 'mold',
             moldId, targetType, date,
             machine: document.getElementById('usage-machine').value.trim(),
+            direction: document.getElementById('usage-direction') ? document.getElementById('usage-direction').value : 'out',
             shots,
             duration: parseFloat(document.getElementById('usage-duration').value) || 0,
             operator: document.getElementById('usage-operator').value.trim(),
