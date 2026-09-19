@@ -145,7 +145,7 @@ export async function onRequestPost(context) {
   }
 
   const db = current.db;
-  if (!db.usageRecords) db.usageRecords = [];
+  if (!db.usage) db.usage = [];
 
   // 生成唯一ID
   function uid() {
@@ -153,7 +153,7 @@ export async function onRequestPost(context) {
   }
 
   // 1. 找到这个机台上最近一次使用的（模具/工装）
-  const machineUsage = db.usageRecords
+  const machineUsage = db.usage
     .filter(r => r.recordType === 'mold' && r.targetType === type && r.machine === machineNo)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -163,7 +163,7 @@ export async function onRequestPost(context) {
   let oldMoldInRecord = null;
   if (lastMoldOnMachine && lastMoldOnMachine !== moldNo) {
     // 检查旧的最近一条记录是不是已经入库了
-    const oldMoldRecords = db.usageRecords
+    const oldMoldRecords = db.usage
       .filter(r => r.recordType === 'mold' && r.targetType === type && r.moldId === lastMoldOnMachine)
       .sort((a, b) => new Date(b.date) - new Date(a.date));
     const oldMoldLastDir = oldMoldRecords.length > 0 ? oldMoldRecords[0].direction : null;
@@ -182,12 +182,12 @@ export async function onRequestPost(context) {
         operator: '生产系统自动同步',
         notes: `生产系统自动入库：机台${machineNo}切换${type === 'fixture' ? '工装' : '模具'}`
       };
-      db.usageRecords.push(oldMoldInRecord);
+      db.usage.push(oldMoldInRecord);
     }
   }
 
   // 3. 给新的生成出库记录（如果最近一条不是出库）
-  const newMoldRecords = db.usageRecords
+  const newMoldRecords = db.usage
     .filter(r => r.recordType === 'mold' && r.targetType === type && r.moldId === moldNo)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
   const newMoldLastDir = newMoldRecords.length > 0 ? newMoldRecords[0].direction : null;
@@ -207,7 +207,7 @@ export async function onRequestPost(context) {
       operator: '生产系统自动同步',
       notes: `生产系统自动出库：生产产品${productName || ''}，数量${qty || 0}`
     };
-    db.usageRecords.push(newMoldOutRecord);
+    db.usage.push(newMoldOutRecord);
   }
 
   // 写回KV
