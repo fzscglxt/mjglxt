@@ -5773,7 +5773,7 @@ function setUsageMoldById(moldId, targetType) {
     const type = targetType || 'mold';
     let m = null;
     if (type === 'fixture') {
-        m = fixtures.find(f => f.id === moldId);
+        m = fixtures.find(f => f.id === moldId) || fixtures.find(f => f.code === moldId);
         if (m) m._targetType = 'fixture';
     } else {
         m = getMoldById(moldId);
