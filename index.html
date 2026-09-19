@@ -5948,6 +5948,7 @@ function openUsageForm(id) {
     document.getElementById('usage-duration').value = 0;
     document.getElementById('usage-date').value = today();
     document.getElementById('usage-record-type').value = 'mold';
+    document.getElementById('usage-direction').value = 'out';
     onUsageTypeChange();
 
     if (id) {
@@ -5969,6 +5970,7 @@ function openUsageForm(id) {
                 setUsageMoldById(r.moldId, r.targetType || 'mold');
                 document.getElementById('usage-date').value = r.date;
                 document.getElementById('usage-machine').value = r.machine || '';
+            document.getElementById('usage-direction').value = r.direction || 'out';
                 document.getElementById('usage-shots').value = r.shots || 0;
                 document.getElementById('usage-duration').value = r.duration || 0;
                 document.getElementById('usage-operator').value = r.operator || '';
@@ -6057,7 +6059,7 @@ function saveUsage() {
 
         const oldShots = oldRecord ? (oldRecord.shots || 0) : 0;
         const data = {
-            recordType: 'mold',
+            recordType: 'mold', direction: document.getElementById('usage-direction').value,
             moldId, targetType, date,
             machine: document.getElementById('usage-machine').value.trim(),
             shots,
