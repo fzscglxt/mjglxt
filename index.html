@@ -216,6 +216,21 @@
         tbody tr:hover { background: #f8f9ff; }
         .table-empty { text-align: center; padding: 40px; color: var(--text-tertiary); }
 
+        /* 维修/保养记录：操作列固定右侧，窄屏横向滚动时编辑/删除按钮始终可见 */
+        #page-repair-records .table-wrap table th:last-child,
+        #page-repair-records .table-wrap table td:last-child,
+        #page-maintenance-records .table-wrap table th:last-child,
+        #page-maintenance-records .table-wrap table td:last-child {
+            position: sticky; right: 0; z-index: 2;
+            background: #fff;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.07);
+        }
+        #page-repair-records .table-wrap table thead th:last-child,
+        #page-maintenance-records .table-wrap table thead th:last-child {
+            background: #f8f9fa; z-index: 3;
+        }
+        tbody tr:hover #page-repair-records .table-wrap table td:last-child { background: #f8f9ff; }
+
         /* ===== Status Badges ===== */
         .badge {
             display: inline-block;
@@ -1396,7 +1411,7 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th>日期</th><th>模具编号</th><th>模具名称</th><th>保养类型</th>
+                                    <th>日期</th><th>类型</th><th>模具编号</th><th>模具名称</th><th>保养类型</th>
                                     <th>保养内容</th><th>保养图片</th><th>更换配件</th><th>保养费用</th><th>执行人</th><th>结果</th><th>操作</th>
                                 </tr>
                             </thead>
@@ -1434,7 +1449,7 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th>日期</th><th>模具编号</th><th>模具名称</th><th>故障描述</th>
+                                    <th>日期</th><th>类型</th><th>模具编号</th><th>模具名称</th><th>故障描述</th>
                                     <th>故障原因</th><th>维修内容</th><th>更换配件</th><th>维修费用</th>
                                     <th>停机时长</th><th>级别</th><th>维修人</th><th>操作</th>
                                 </tr>
@@ -5222,15 +5237,15 @@ function renderMaintenanceTable() {
     // 步骤2：空状态分支
     if (total === 0) {
         if (maintenanceRecords.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" class="table-empty">暂无保养记录数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="table-empty">暂无保养记录数据</td></tr>';
         } else if (search || fType) {
             const conds = [
                 search ? `关键词「${escapeHtml(search)}」` : null,
                 fType ? `类型「${escapeHtml(fType)}」` : null
             ].filter(Boolean).join(' + ');
-            tbody.innerHTML = `<tr><td colspan="11" class="table-empty">🔍 未找到匹配（${conds}）的保养记录，请调整筛选条件</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12" class="table-empty">🔍 未找到匹配（${conds}）的保养记录，请调整筛选条件</td></tr>`;
         } else {
-            tbody.innerHTML = '<tr><td colspan="11" class="table-empty">当前筛选条件下暂无保养记录</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="table-empty">当前筛选条件下暂无保养记录</td></tr>';
         }
         renderMaintenancePagination(0, maintPage, maintPageSize);
         return;
@@ -5688,7 +5703,7 @@ function renderRepairTable() {
     }).sort((a,b) => b.date.localeCompare(a.date));
 
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" class="table-empty">暂无维修记录</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" class="table-empty">暂无维修记录</td></tr>';
         return;
     }
 
@@ -6081,22 +6096,11 @@ function saveUsage() {
             usageRecords.push(data);
         }
 
-        // 更新模具/工装的累计模次
-        if (targetType === 'fixture') {
-            const fixture = fixtures.find(f => f.id === moldId) || fixtures.find(f => f.code === moldId);
-            if (fixture) {
-                fixture.shots = (fixture.shots || 0) - oldShots + shots;
-                persistFixtures();
-            }
-        } else {
-            const mold = getMoldById(moldId);
-            if (mold) {
-                mold.shots = (mold.shots || 0) - oldShots + shots;
-                if (lifePercent(mold) >= 80 && mold.status === '正常') {
-                    mold.status = '待保养';
-                }
-                persistMolds();
-            }
+        // 更新模具/工装台账累计模次：按该编号全部入库记录全量重算（与服务端口径一致）
+        recalcLedgerShots(targetType, moldId);
+        // 编辑时若原记录属于另一编号/类型，原编号也要重算
+        if (oldRecord && (oldRecord.moldId !== moldId || (oldRecord.targetType || 'mold') !== targetType)) {
+            recalcLedgerShots(oldRecord.targetType || 'mold', oldRecord.moldId);
         }
     }
 
@@ -6121,19 +6125,8 @@ function deleteUsage(id) {
                 }
             } else {
                 const targetType = r.targetType || 'mold';
-                if (targetType === 'fixture') {
-                    const fixture = fixtures.find(f => f.id === r.moldId) || fixtures.find(f => f.code === r.moldId);
-                    if (fixture) {
-                        fixture.shots = Math.max(0, (fixture.shots||0) - (r.shots||0));
-                        persistFixtures();
-                    }
-                } else {
-                    const mold = getMoldById(r.moldId);
-                    if (mold) {
-                        mold.shots = Math.max(0, (mold.shots||0) - (r.shots||0));
-                        persistMolds();
-                    }
-                }
+                // 删除后按剩余入库记录全量重算台账模次
+                recalcLedgerShots(targetType, r.moldId);
             }
         }
         usageRecords = usageRecords.filter(u => u.id !== id);
@@ -6224,6 +6217,32 @@ function buildAutoUsage(events, targetType, operatorName) {
         return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
     });
     return records;
+}
+
+// 按出入库记录全量重算指定模具/工装台账当前模次
+// 口径：台账当前模次 = 该编号全部入库记录（手动+自动）生产模次之和，与服务端 rebuildUsage 一致
+function recalcLedgerShots(targetType, code) {
+    if (!code) return;
+    const tt = targetType || 'mold';
+    const total = usageRecords
+        .filter(r => r.recordType !== 'spare'
+            && (r.targetType || 'mold') === tt
+            && r.moldId === code
+            && r.direction === 'in')
+        .reduce((s, r) => s + (Number(r.shots) || 0), 0);
+    if (tt === 'fixture') {
+        const f = fixtures.find(x => x && x.code === code);
+        if (f) { f.shots = total; persistFixtures(); }
+    } else {
+        const m = molds.find(x => x && x.code === code);
+        if (m) {
+            m.shots = total;
+            if (typeof lifePercent === 'function' && lifePercent(m) >= 80 && m.status === '正常') {
+                m.status = '待保养';
+            }
+            persistMolds();
+        }
+    }
 }
 
 // 用生产事件在前端重建自动出入库（保留备件记录与手动记录），并重算台账累计模次
