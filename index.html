@@ -3371,7 +3371,7 @@ function escapeHtml(s) {
     if (s == null) return '';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-function getMoldById(id) { return molds.find(m => m.id === id); }
+function getMoldById(id) { return molds.find(m => m.id === id) || molds.find(m => m.code === id); }
 
 function lifePercent(mold) {
     if (!mold.lifetime || mold.lifetime <= 0) return 0;
@@ -4344,7 +4344,7 @@ function selectPlanMold(mold) {
     const hidden = document.getElementById('plan-mold');
     const list = document.getElementById('plan-mold-list');
     const typeHidden = document.getElementById('plan-target-type');
-    if (hidden) hidden.value = mold.id;
+    if (hidden) hidden.value = mold.code || mold.id;
     if (typeHidden) typeHidden.value = mold._targetType || 'mold';
     const typeLabel = mold._targetType === 'fixture' ? '[工装] ' : '';
     if (search) search.value = `${typeLabel}${mold.code} - ${mold.name}`;
@@ -4358,7 +4358,7 @@ function setPlanMoldById(moldId, targetType) {
     const type = targetType || 'mold';
     let m = null;
     if (type === 'fixture') {
-        m = fixtures.find(f => f.id === moldId);
+        m = fixtures.find(f => f.id === moldId) || fixtures.find(f => f.code === moldId);
         if (m) m._targetType = 'fixture';
     } else {
         m = getMoldById(moldId);
@@ -5785,7 +5785,7 @@ function setUsageMoldById(moldId, targetType) {
     const hidden = document.getElementById('usage-mold');
     const list = document.getElementById('usage-mold-list');
     const typeHidden = document.getElementById('usage-target-type');
-    if (hidden) hidden.value = moldId;
+    if (hidden) hidden.value = m.code || moldId;
     if (typeHidden) typeHidden.value = type;
     const typeLabel = type === 'fixture' ? '[工装] ' : '';
     if (search) search.value = `${typeLabel}${m.code} - ${m.name}`;
@@ -5990,7 +5990,7 @@ function updateUsageMoldInfo() {
     if (!moldId) return;
     let mold = null;
     if (targetType === 'fixture') {
-        mold = fixtures.find(f => f.id === moldId);
+        mold = fixtures.find(f => f.id === moldId) || fixtures.find(f => f.code === moldId);
     } else {
         mold = getMoldById(moldId);
     }
@@ -6081,7 +6081,7 @@ function saveUsage() {
 
         // 更新模具/工装的累计模次
         if (targetType === 'fixture') {
-            const fixture = fixtures.find(f => f.id === moldId);
+            const fixture = fixtures.find(f => f.id === moldId) || fixtures.find(f => f.code === moldId);
             if (fixture) {
                 fixture.shots = (fixture.shots || 0) - oldShots + shots;
                 persistFixtures();
@@ -6120,7 +6120,7 @@ function deleteUsage(id) {
             } else {
                 const targetType = r.targetType || 'mold';
                 if (targetType === 'fixture') {
-                    const fixture = fixtures.find(f => f.id === r.moldId);
+                    const fixture = fixtures.find(f => f.id === r.moldId) || fixtures.find(f => f.code === r.moldId);
                     if (fixture) {
                         fixture.shots = Math.max(0, (fixture.shots||0) - (r.shots||0));
                         persistFixtures();
