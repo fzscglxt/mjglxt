@@ -5241,9 +5241,12 @@ function renderMaintenanceTable() {
         const typeTag = targetType === 'fixture'
             ? '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">工装</span>'
             : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
+        const dirTag = r.direction === 'out'
+            ? '<span style="display:inline-block;padding:1px 5px;background:#34a853;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">出库</span>'
+            : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">入库</span>';
         return `<tr>
             <td>${r.date}</td>
-            <td><strong>${typeTag}${escapeHtml(mold?.code||'已删除')}</strong></td>
+            <td><strong>${typeTag}${dirTag}${escapeHtml(mold?.code||'已删除')}</strong></td>
             <td>${escapeHtml(mold?.name||'—')}</td>
             <td>${r.type}</td>
             <td title="${escapeHtml(r.content)}">${escapeHtml(r.content.length > 30 ? r.content.slice(0,30)+'...' : r.content)}</td>
@@ -5696,9 +5699,12 @@ function renderRepairTable() {
         const typeTag = targetType === 'fixture'
             ? '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">工装</span>'
             : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
+        const dirTag = r.direction === 'out'
+            ? '<span style="display:inline-block;padding:1px 5px;background:#34a853;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">出库</span>'
+            : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">入库</span>';
         return `<tr>
             <td>${r.date}</td>
-            <td><strong>${typeTag}${escapeHtml(mold?.code||'已删除')}</strong></td>
+            <td><strong>${typeTag}${dirTag}${escapeHtml(mold?.code||'已删除')}</strong></td>
             <td>${escapeHtml(mold?.name||'—')}</td>
             <td title="${escapeHtml(r.fault)}">${escapeHtml(r.fault.length > 20 ? r.fault.slice(0,20)+'...' : r.fault)}</td>
             <td title="${escapeHtml(r.cause||'')}">${escapeHtml(r.cause ? (r.cause.length > 15 ? r.cause.slice(0,15)+'...' : r.cause) : '—')}</td>
@@ -6198,9 +6204,12 @@ function renderUsageTable() {
         const typeTag = targetType === 'fixture'
             ? '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">工装</span>'
             : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
+        const dirTag = r.direction === 'out'
+            ? '<span style="display:inline-block;padding:1px 5px;background:#34a853;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">出库</span>'
+            : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">入库</span>';
         return `<tr>
             <td>${r.date}</td>
-            <td><strong>${typeTag}${escapeHtml(mold?.code||'已删除')}</strong></td>
+            <td><strong>${typeTag}${dirTag}${escapeHtml(mold?.code||'已删除')}</strong></td>
             <td>${escapeHtml(mold?.name||'—')}</td>
             <td>${escapeHtml(r.machine||'—')}</td>
             <td>${(r.shots||0).toLocaleString()}</td>
