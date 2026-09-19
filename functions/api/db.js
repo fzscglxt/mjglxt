@@ -131,10 +131,13 @@ export async function onRequestPost(context) {
     return jsonResponse({ error: 'invalid_json' }, 400);
   }
 
-  const { machineNo, moldNo, date, productName, qty, duration } = body;
+  const { machineNo, moldNo, date, productName, qty, duration, targetType } = body;
   if (!machineNo || !moldNo || !date) {
-    return jsonResponse({ error: 'missing_params', message: '缺少机台编号、模具编号或日期' }, 400);
+    return jsonResponse({ error: 'missing_params', message: '缺少机台编号、编号或日期' }, 400);
   }
+
+  // 默认是模具，支持工装同步
+  const type = targetType || 'mold';
 
   const current = await readData(kv);
   if (!current.db) {
@@ -149,19 +152,19 @@ export async function onRequestPost(context) {
     return 'usage_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
   }
 
-  // 1. 找到这个机台上最近一次使用的模具（排除这次的新模具）
+  // 1. 找到这个机台上最近一次使用的（模具/工装）
   const machineUsage = db.usageRecords
-    .filter(r => r.recordType === 'mold' && r.machine === machineNo)
+    .filter(r => r.recordType === 'mold' && r.targetType === type && r.machine === machineNo)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const lastMoldOnMachine = machineUsage.length > 0 ? machineUsage[0].moldId : null;
 
-  // 2. 如果机台上原来有旧模具，且和这次的不一样，给旧模具生成入库记录
+  // 2. 如果机台上原来有旧的，且和这次的不一样，给旧的生成入库记录
   let oldMoldInRecord = null;
   if (lastMoldOnMachine && lastMoldOnMachine !== moldNo) {
-    // 检查旧模具最近一条记录是不是已经入库了
+    // 检查旧的最近一条记录是不是已经入库了
     const oldMoldRecords = db.usageRecords
-      .filter(r => r.recordType === 'mold' && r.moldId === lastMoldOnMachine)
+      .filter(r => r.recordType === 'mold' && r.targetType === type && r.moldId === lastMoldOnMachine)
       .sort((a, b) => new Date(b.date) - new Date(a.date));
     const oldMoldLastDir = oldMoldRecords.length > 0 ? oldMoldRecords[0].direction : null;
 
@@ -170,22 +173,22 @@ export async function onRequestPost(context) {
         id: uid(),
         recordType: 'mold',
         moldId: lastMoldOnMachine,
-        targetType: 'mold',
+        targetType: type,
         direction: 'in',
         date: date,
         machine: machineNo,
         shots: 0,
         duration: 0,
         operator: '生产系统自动同步',
-        notes: `生产系统自动入库：机台${machineNo}切换模具`
+        notes: `生产系统自动入库：机台${machineNo}切换${type === 'fixture' ? '工装' : '模具'}`
       };
       db.usageRecords.push(oldMoldInRecord);
     }
   }
 
-  // 3. 给新模具生成出库记录（如果最近一条不是出库）
+  // 3. 给新的生成出库记录（如果最近一条不是出库）
   const newMoldRecords = db.usageRecords
-    .filter(r => r.recordType === 'mold' && r.moldId === moldNo)
+    .filter(r => r.recordType === 'mold' && r.targetType === type && r.moldId === moldNo)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
   const newMoldLastDir = newMoldRecords.length > 0 ? newMoldRecords[0].direction : null;
 
@@ -195,7 +198,7 @@ export async function onRequestPost(context) {
       id: uid(),
       recordType: 'mold',
       moldId: moldNo,
-      targetType: 'mold',
+      targetType: type,
       direction: 'out',
       date: date,
       machine: machineNo,
