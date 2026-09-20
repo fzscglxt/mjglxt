@@ -2489,57 +2489,132 @@ window.cloudSync = cloudSync;
 // ============================================================
 const localBackup = {
     dirHandle: null,
-    _lastDay: '',
+    pendingHandle: null,
+    gestureBound: false,
+    lastBackupAt: 0,
+    getData() {
+        return JSON.stringify(cloudSync.pack());
+    },
     async init() {
         try {
             const db = await this._openDB();
-            const tx = db.transaction('handles', 'readonly');
-            const rec = await tx.objectStore('handles').get('backupDir');
+            const rec = await this._getRecord(db);
             if (rec && rec.handle) {
-                const allowed = await rec.handle.queryPermission({ mode: 'readwrite' });
-                if (allowed === 'granted') this.dirHandle = rec.handle;
+                const perm = await rec.handle.queryPermission({ mode: 'readwrite' });
+                if (perm === 'granted') {
+                    this.dirHandle = rec.handle;
+                } else if (perm === 'prompt') {
+                    this.pendingHandle = rec.handle;
+                    this._bindGesture();
+                }
             }
-        } catch(e) {}
+        } catch (e) { console.warn('[localBackup] init', e); }
         this._renderStatus();
     },
+    _getRecord(db) {
+        return new Promise(function (resolve, reject) {
+            const tx = db.transaction('handles', 'readonly');
+            const req = tx.objectStore('handles').get('backupDir');
+            req.onsuccess = function () { resolve(req.result); };
+            req.onerror = function () { reject(req.error); };
+        });
+    },
+    _bindGesture() {
+        if (this.gestureBound) return;
+        this.gestureBound = true;
+        const self = this;
+        const resume = async function () {
+            if (!self.pendingHandle) return;
+            try {
+                const permReq = self.pendingHandle.requestPermission({ mode: 'readwrite' });
+                const perm = await permReq;
+                if (perm === 'granted') {
+                    self.dirHandle = self.pendingHandle;
+                    self.pendingHandle = null;
+                    self.gestureBound = false;
+                    window.removeEventListener('pointerdown', resume);
+                    window.removeEventListener('keydown', resume);
+                    try { await self.save(); } catch (es) {}
+                    if (typeof showToast === 'function') showToast('✅ 本地备份已恢复', 'success');
+                }
+            } catch (e) {}
+            self._renderStatus();
+        };
+        window.addEventListener('pointerdown', resume);
+        window.addEventListener('keydown', resume);
+    },
     _openDB() {
-        return new Promise((resolve, reject) => {
+        return new Promise(function (resolve, reject) {
             const req = indexedDB.open('mold_local_backup', 1);
-            req.onupgradeneeded = () => req.result.createObjectStore('handles');
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
+            req.onupgradeneeded = function () { req.result.createObjectStore('handles'); };
+            req.onsuccess = function () { resolve(req.result); };
+            req.onerror = function () { reject(req.error); };
         });
     },
     async choose() {
-        if (!window.showDirectoryPicker) { alert('请用 Chrome/Edge 最新版浏览器'); return false; }
+        if (!window.showDirectoryPicker) {
+            alert('当前浏览器不支持本地自动备份，请使用最新版 Chrome 或 Edge 桌面浏览器。');
+            return false;
+        }
         try {
             const dirHandle = await window.showDirectoryPicker({ id: 'mold_backup', mode: 'readwrite' });
             this.dirHandle = dirHandle;
+            this.pendingHandle = null;
             const db = await this._openDB();
             const tx = db.transaction('handles', 'readwrite');
             tx.objectStore('handles').put({ handle: dirHandle, savedAt: new Date().toISOString() }, 'backupDir');
             await tx.done;
-            this.save();
+            await this.save();
             this._renderStatus();
-            if (typeof showToast === 'function') showToast('✅ 本地自动备份已开启', 'success');
+            if (typeof showToast === 'function') {
+                showToast('✅ 本地自动备份已开启，之后每次点“保存”都会自动备份到该文件夹', 'success');
+            } else {
+                alert('✅ 本地自动备份已开启，之后每次保存都会自动备份到该文件夹');
+            }
             return true;
-        } catch(e) { if (e.name !== 'AbortError') alert('选择文件夹失败：' + e.message); }
+        } catch (e) {
+            if (e.name !== 'AbortError') alert('选择文件夹失败：' + e.message);
+            return false;
+        }
     },
     async save() {
         if (!this.dirHandle) return;
         try {
             const now = new Date();
-            const pad = n => String(n).padStart(2,'0');
-            const data = JSON.stringify(cloudSync.pack());
+            const pad = function (n) { return String(n).padStart(2, '0'); };
+            const day = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+            const data = this.getData();
             const f1 = await this.dirHandle.getFileHandle('latest.json', { create: true });
             const w1 = await f1.createWritable();
-            await w1.write(data); await w1.close();
-        } catch(e) { console.warn('localBackup save', e); }
+            await w1.write(data);
+            await w1.close();
+            try {
+                const hist = await this.dirHandle.getDirectoryHandle('历史备份', { create: true });
+                const f2 = await hist.getFileHandle('backup_' + day + '.json', { create: true });
+                const w2 = await f2.createWritable();
+                await w2.write(data);
+                await w2.close();
+            } catch (eH) { console.warn('[localBackup] history', eH); }
+            this.lastBackupAt = now.getTime();
+            this._renderStatus();
+        } catch (e) {
+            console.warn('[localBackup] save', e);
+        }
     },
     _renderStatus() {
         const el = document.getElementById('local-backup-status');
         if (!el) return;
-        el.innerHTML = this.dirHandle ? '✅ <b>已开启</b>：每次保存自动写 latest.json' : '⚪ 未开启';
+        if (this.dirHandle) {
+            const at = this.lastBackupAt ? new Date(this.lastBackupAt).toLocaleString('zh-CN') : '本次开启';
+            el.innerHTML = '✅ <b>已开启</b>：每次保存自动写 <b>latest.json</b>，并在「历史备份」子文件夹每天留存一份。上次写入：' + at;
+            el.style.color = '#166534';
+        } else if (this.pendingHandle) {
+            el.innerHTML = '⚠️ 本地备份待恢复：<b>请点一下页面任意位置</b>即可恢复（无需重新选择文件夹）。';
+            el.style.color = '#b45309';
+        } else {
+            el.innerHTML = '⚪ 未开启：点上面按钮，选择 D:\\系统数据\\模具管理系统备份，之后每次保存自动备份到该文件夹。';
+            el.style.color = '#9aa0a6';
+        }
     }
 };
 window.localBackup = localBackup;
