@@ -2500,10 +2500,15 @@ const localBackup = {
             const db = await this._openDB();
             const rec = await this._getRecord(db);
             if (rec && rec.handle) {
-                const perm = await rec.handle.queryPermission({ mode: 'readwrite' });
+                let perm = 'prompt';
+                try {
+                    if (typeof rec.handle.queryPermission === 'function') {
+                        perm = await rec.handle.queryPermission({ mode: 'readwrite' });
+                    }
+                } catch (eq) { perm = 'prompt'; }
                 if (perm === 'granted') {
                     this.dirHandle = rec.handle;
-                } else if (perm === 'prompt') {
+                } else {
                     this.pendingHandle = rec.handle;
                     this._bindGesture();
                 }
@@ -2525,23 +2530,34 @@ const localBackup = {
         const self = this;
         const resume = async function () {
             if (!self.pendingHandle) return;
-            try {
-                const permReq = self.pendingHandle.requestPermission({ mode: 'readwrite' });
-                const perm = await permReq;
-                if (perm === 'granted') {
-                    self.dirHandle = self.pendingHandle;
-                    self.pendingHandle = null;
-                    self.gestureBound = false;
-                    window.removeEventListener('pointerdown', resume);
-                    window.removeEventListener('keydown', resume);
-                    try { await self.save(); } catch (es) {}
-                    if (typeof showToast === 'function') showToast('✅ 本地备份已恢复', 'success');
-                }
-            } catch (e) {}
-            self._renderStatus();
+            await self._restoreOnce();
         };
         window.addEventListener('pointerdown', resume);
         window.addEventListener('keydown', resume);
+    },
+    async _restoreOnce() {
+        const handle = this.pendingHandle;
+        if (!handle) return false;
+        try {
+            let perm = 'prompt';
+            if (typeof handle.requestPermission === 'function') {
+                const req = handle.requestPermission({ mode: 'readwrite' });
+                perm = await req;
+            }
+            if (perm === 'granted') {
+                this.dirHandle = handle;
+                this.pendingHandle = null;
+                this.gestureBound = false;
+                try { await this.save(); } catch (es) {}
+                this._renderStatus();
+                if (typeof showToast === 'function') showToast('✅ 本地备份已恢复', 'success');
+                return true;
+            }
+            this._renderStatus('权限未授予（' + perm + '），可再点一次按钮，或重新点“选择本地备份文件夹”。');
+        } catch (e) {
+            this._renderStatus('恢复失败：' + (e && e.message ? e.message : String(e)) + '。请重新点“选择本地备份文件夹”。');
+        }
+        return false;
     },
     _openDB() {
         return new Promise(function (resolve, reject) {
@@ -2601,16 +2617,19 @@ const localBackup = {
             console.warn('[localBackup] save', e);
         }
     },
-    _renderStatus() {
+    _renderStatus(extraMsg) {
         const el = document.getElementById('local-backup-status');
         if (!el) return;
+        const self = this;
         if (this.dirHandle) {
             const at = this.lastBackupAt ? new Date(this.lastBackupAt).toLocaleString('zh-CN') : '本次开启';
             el.innerHTML = '✅ <b>已开启</b>：每次保存自动写 <b>latest.json</b>，并在「历史备份」子文件夹每天留存一份。上次写入：' + at;
             el.style.color = '#166534';
         } else if (this.pendingHandle) {
-            el.innerHTML = '⚠️ 本地备份待恢复：<b>请点一下页面任意位置</b>即可恢复（无需重新选择文件夹）。';
+            el.innerHTML = '⚠️ 本地备份待恢复：<button id="lb-restore-btn" type="button" style="margin:0 4px;padding:2px 10px;border:1px solid #b45309;background:#ffffff;color:#b45309;border-radius:5px;cursor:pointer;font-size:12px;">🔓 点此恢复本地备份</button>' + (typeof extraMsg === 'string' && extraMsg ? '<br><span>' + extraMsg + '</span>' : '<span>（无需重新选择文件夹）</span>');
             el.style.color = '#b45309';
+            const lbBtn = document.getElementById('lb-restore-btn');
+            if (lbBtn) lbBtn.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); self._restoreOnce(); };
         } else {
             el.innerHTML = '⚪ 未开启：点上面按钮，选择 D:\\系统数据\\模具管理系统备份，之后每次保存自动备份到该文件夹。';
             el.style.color = '#9aa0a6';
