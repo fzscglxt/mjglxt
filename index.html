@@ -1152,6 +1152,36 @@ td.rc-sum-red { background: rgba(239,68,68,.28) !important; color: #f87171; }
 .login-brand-logo .brand-en { color: var(--text-secondary) !important; }
 .login-page .brand-svg text { fill: #eaf4ff; }
 .login-page .brand-svg circle, .login-page .brand-svg rect { stroke: var(--primary); }
+
+/* ===== dark-theme-override-patch2: inline light remnants (pills, settings, buttons) ===== */
+/* status pills (monthly / OEE / rate tables), spans only */
+span[style*="#e6f4ea"],span[style*="#d9f0dd"]{background:rgba(34,197,94,.16)!important;color:#4ade80!important;}
+span[style*="#fce8e6"],span[style*="#fbd7d3"],span[style*="#fef2f2"]{background:rgba(239,68,68,.16)!important;color:#f87171!important;}
+span[style*="#fef7e0"],span[style*="#fdecc8"]{background:rgba(245,158,11,.16)!important;color:#fbbf24!important;}
+span[style*="#e8f0fe"]{background:rgba(0,212,255,.16)!important;color:#22d3ee!important;}
+/* neutral light-gray blocks: help text, totals, modal table headers */
+[style*="#f8f9fa"],[style*="#f5f5f5"]{background:var(--cell)!important;color:var(--text-secondary)!important;}
+/* green cloud-sync banner */
+[style*="#f0fdf4"]{background:rgba(34,197,94,.12)!important;border-color:rgba(34,197,94,.4)!important;color:var(--text)!important;}
+/* amber local-backup banners */
+[style*="#fff8e1"],[style*="#fef3c7"],[style*="#fef9c3"],[style*="#fffbeb"]{background:rgba(245,158,11,.12)!important;border-color:rgba(245,158,11,.4)!important;color:var(--text)!important;}
+/* dark text colors invisible on dark surfaces */
+[style*="#374151"]{color:var(--text)!important;}
+[style*="#5f6368"]{color:var(--text-secondary)!important;}
+[style*="#9aa0a6"]{color:var(--text-tertiary)!important;}
+[style*="#166534"]{color:#4ade80!important;}
+/* light borders */
+[style*="#e5e7eb"],[style*="#e0e0e0"],[style*="solid #ddd"],[style*="solid #dddddd"]{border-color:var(--border)!important;}
+/* precise buttons (avoid global .btn-outline side effects) */
+#lb-restore-btn{background:var(--input-bg)!important;color:#fbbf24!important;border:1px solid rgba(245,158,11,.5)!important;}
+button[onclick="saveDataToSource()"]{background:var(--input-bg)!important;color:var(--text)!important;border:1px solid var(--border)!important;}
+button[onclick="saveDataToSource()"]:hover{background:rgba(0,212,255,.12)!important;color:var(--primary)!important;border-color:var(--primary)!important;}
+button[onclick="localBackup.choose()"]{background:var(--input-bg)!important;color:var(--text)!important;border:1px solid var(--border)!important;}
+button[onclick="localBackup.choose()"]:hover{background:rgba(0,212,255,.12)!important;color:var(--primary)!important;border-color:var(--primary)!important;}
+/* native file input "choose file" button */
+input[type=file]::file-selector-button{background:var(--cell);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 12px;margin-right:10px;cursor:pointer;}
+input[type=file]::file-selector-button:hover{background:var(--primary-light);color:var(--primary);border-color:var(--primary);}
+/* ===== end dark-theme-override-patch2 ===== */
 /* ===== end dark-theme-override ===== */
     </style>
 </head>
