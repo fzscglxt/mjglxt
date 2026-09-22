@@ -213,7 +213,7 @@
         .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th {
-            text-align: left;
+            text-align: center;
             padding: 10px 12px;
             background: #f8f9fa;
             border-bottom: 2px solid var(--border-light);
@@ -223,10 +223,12 @@
             position: sticky; top: 0;
         }
         td {
+            text-align: center;
             padding: 10px 12px;
             border-bottom: 1px solid var(--border-light);
             white-space: nowrap;
         }
+        td.cell-left { text-align: left; }
         tbody tr:hover { background: #f8f9ff; }
         .table-empty { text-align: center; padding: 40px; color: var(--text-tertiary); }
 
@@ -4268,7 +4270,7 @@ function renderMoldTable() {
         const pct = lifePercent(m);
         return `<tr>
             <td><strong>${escapeHtml(m.code)}</strong></td>
-            <td>${escapeHtml(m.name)}</td>
+            <td class="cell-left">${escapeHtml(m.name)}</td>
             <td>${escapeHtml(m.moldType||'—')}</td>
             <td>${escapeHtml(m.spec||'—')}</td>
             <td>${escapeHtml(m.weight||'—')}</td>
@@ -4554,7 +4556,7 @@ function renderFixtureTable() {
     tbody.innerHTML = pageData.map(f => {
         return `<tr>
             <td><strong>${escapeHtml(f.code)}</strong></td>
-            <td>${escapeHtml(f.name)}</td>
+            <td class="cell-left">${escapeHtml(f.name)}</td>
             <td>${escapeHtml(f.moldType||'—')}</td>
             <td>${escapeHtml(f.spec||'—')}</td>
             <td>${escapeHtml(f.machine||'—')}</td>
@@ -5030,7 +5032,7 @@ function renderPlanTable() {
             : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
         return `<tr>
             <td><strong>${typeTag}${_planHighlightText(p.mold?.code||'已删除', terms)}</strong></td>
-            <td>${_planHighlightText(p.mold?.name||'—', terms)}</td>
+            <td class="cell-left">${_planHighlightText(p.mold?.name||'—', terms)}</td>
             <td>${p.type}</td>
             <td>${p.intervalDays}天${p.shotInterval ? ' / ' + p.shotInterval + '模次' : ''}</td>
             <td>${fmtDate(p.lastDate)}</td>
@@ -5573,7 +5575,7 @@ function renderMaintenanceTable() {
             <td>${r.date}</td>
             <td><strong>${typeTag}</strong></td>
             <td>${escapeHtml(mold?.code||'已删除')}</td>
-            <td>${escapeHtml(mold?.name||'—')}</td>
+            <td class="cell-left">${escapeHtml(mold?.name||'—')}</td>
             <td>${r.type}</td>
             <td title="${escapeHtml(r.content)}">${escapeHtml(r.content.length > 30 ? r.content.slice(0,30)+'...' : r.content)}</td>
             <td>${r.photo ? '<img src="' + r.photo + '" style="width:48px;height:48px;object-fit:cover;border-radius:4px;cursor:pointer;border:1px solid #e0e0e0;" onclick="showMaintPhotoPreview(\'' + r.photo + '\')">' : '—'}</td>
@@ -6029,7 +6031,7 @@ function renderRepairTable() {
             <td>${r.date}</td>
             <td><strong>${typeTag}</strong></td>
             <td>${escapeHtml(mold?.code||'已删除')}</td>
-            <td>${escapeHtml(mold?.name||'—')}</td>
+            <td class="cell-left">${escapeHtml(mold?.name||'—')}</td>
             <td title="${escapeHtml(r.fault)}">${escapeHtml(r.fault.length > 20 ? r.fault.slice(0,20)+'...' : r.fault)}</td>
             <td title="${escapeHtml(r.cause||'')}">${escapeHtml(r.cause ? (r.cause.length > 15 ? r.cause.slice(0,15)+'...' : r.cause) : '—')}</td>
             <td title="${escapeHtml(r.content)}">${escapeHtml(r.content.length > 20 ? r.content.slice(0,20)+'...' : r.content)}</td>
@@ -6698,7 +6700,7 @@ function renderUsageTable() {
             <td>${r.date}</td>
             <td><strong>${typeTag}${dirTag}</strong></td>
             <td>${escapeHtml(mold?.code||'已删除')}</td>
-            <td>${escapeHtml(mold?.name||'—')}</td>
+            <td class="cell-left">${escapeHtml(mold?.name||'—')}</td>
             <td>${escapeHtml(r.machine||'—')}</td>
             <td>${(r.shots||0).toLocaleString()}</td>
             <td>${mold ? (mold.shots||0).toLocaleString() : '—'}</td>
@@ -6879,7 +6881,7 @@ function renderReports() {
             const lastRepair = repairRecords.filter(r => r.moldId === m.id).sort((a,b) => b.date.localeCompare(a.date))[0];
             return `<tr>
                 <td><strong>${escapeHtml(m.code)}</strong></td>
-                <td>${escapeHtml(m.name)}</td>
+                <td class="cell-left">${escapeHtml(m.name)}</td>
                 <td>${statusBadge(m.status)}</td>
                 <td>${(m.shots||0).toLocaleString()}</td>
                 <td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${lifeColor(pct)}"></div></div><span class="progress-text">${pct}%</span></td>
@@ -6901,7 +6903,7 @@ function renderReports() {
             const pct = lifePercent(f);
             return `<tr>
                 <td><strong>${escapeHtml(f.code)}</strong></td>
-                <td>${escapeHtml(f.name)}</td>
+                <td class="cell-left">${escapeHtml(f.name)}</td>
                 <td>${escapeHtml(f.moldType||'—')}</td>
                 <td>${statusBadge(f.status)}</td>
                 <td>${(f.shots||0).toLocaleString()}</td>
