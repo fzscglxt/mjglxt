@@ -2693,6 +2693,29 @@ const cloudSync = {
                 if (typeof showToast === 'function') showToast('🔄 其他电脑更新了数据，点 ↻ 刷新', 'info');
             }
         }, 90000);
+    },
+    // 仅把本次登录时间合并上云（不推送本地业务数据，避免旧数据覆盖云端）
+    syncLoginTime: async function(username) {
+        if (!this.isCloudConfigured() || !username) return false;
+        const nowISO = new Date().toISOString();
+        for (let i = 0; i < 2; i++) {
+            try {
+                const cur = await this.pull();
+                const remote = cur && cur.db;
+                if (!remote || !Array.isArray(remote.users)) return false;
+                const target = remote.users.find(u => u && u.username === username);
+                if (!target) return false;
+                target.lastLogin = nowISO;
+                const res = await fetch(CLOUD_CONFIG.apiBase + '/api/db', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'If-Version': String(cur.version || 0) },
+                    body: JSON.stringify({ db: remote, savedBy: username })
+                });
+                if (res.status === 200) { const j = await res.json().catch(() => ({})); if (j && typeof j.version === 'number') this.version = j.version; return true; }
+                if (res.status !== 409) return false;
+            } catch (e) { return false; }
+        }
+        return false;
     }
 };
 window.cloudSync = cloudSync;
@@ -3212,6 +3235,7 @@ window.handleLogin = async function() {
     localStorage.setItem(STORE_KEYS.session, JSON.stringify({ userId: user.id, time: Date.now() }));
     user.lastLogin = new Date().toISOString();
     persistUsers();
+    try { cloudSync.syncLoginTime(user.username); } catch (e) {}
     currentUser = user;
     console.log('[Login] 登录成功！当前用户:', currentUser.username, '角色:', currentUser.role);
 
