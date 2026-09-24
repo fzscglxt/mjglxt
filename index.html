@@ -943,6 +943,8 @@
         /* ===== 大屏看板（Kiosk）只读模式：隐藏保存按钮与账号区 ===== */
         body.kiosk-mode #cloud-save-btn,
         body.kiosk-mode #sidebar-user { display: none !important; }
+        body.kiosk-mode button[onclick^="saveDataToSource"],
+        body.kiosk-mode button[onclick^="reloadFromSource"] { display: none !important; }
         .sidebar-user {
             padding: 12px 16px;
             border-top: 1px solid rgba(255,255,255,0.08);
