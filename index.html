@@ -940,6 +940,9 @@
 
         /* ===== Permission Controls ===== */
         .btn-permission-hide { display: none !important; }
+        /* ===== 大屏看板（Kiosk）只读模式：隐藏保存按钮与账号区 ===== */
+        body.kiosk-mode #cloud-save-btn,
+        body.kiosk-mode #sidebar-user { display: none !important; }
         .sidebar-user {
             padding: 12px 16px;
             border-top: 1px solid rgba(255,255,255,0.08);
@@ -1292,7 +1295,7 @@ input[type=file]::file-selector-button:hover{background:var(--primary-light);col
         <div class="sidebar-cloud" id="sidebar-cloud">
             <span class="cloud-dot" id="cloud-dot"></span>
             <span class="cloud-text" id="cloud-text">数据加载中…</span>
-            <button class="cloud-refresh" title="保存数据到云端" onclick="cloudSync.manualSave()">💾 保存</button>
+            <button class="cloud-refresh" id="cloud-save-btn" title="保存数据到云端" onclick="cloudSync.manualSave()">💾 保存</button>
             <button class="cloud-refresh" title="从云端刷新最新数据" onclick="location.reload()">↻</button>
         </div>
         <div class="sidebar-footer">
@@ -3150,6 +3153,14 @@ function checkSession() {
     return false;
 }
 
+// ===== 大屏看板（Kiosk）只读自动登录 =====
+function isKioskMode() {
+    try { return new URLSearchParams(location.search).has('kiosk'); } catch (e) { return false; }
+}
+function kioskLogin() {
+    currentUser = { id: 'kiosk_screen', username: 'kiosk_viewer', fullname: '大屏看板', role: 'viewer', status: 'active', kiosk: true };
+}
+
 // 密码显示/隐藏切换 - 显式挂载到window对象确保全局可访问
 window.togglePassword = function() {
     const input = document.getElementById('login-password');
@@ -3276,6 +3287,11 @@ function showApp() {
 
     // 应用权限控制
     applyPermissions();
+
+    // 大屏 Kiosk：纯只读，隐藏保存按钮与账号区
+    if (isKioskMode() || currentUser.kiosk) {
+        document.body.classList.add('kiosk-mode');
+    }
 
     // 初始化系统
     try {
@@ -7490,8 +7506,9 @@ window.addEventListener('DOMContentLoaded', () => {
         console.error('加载用户数据失败:', error);
         alert('加载用户数据失败，请检查source/data.js文件。错误信息：' + error.message);
     }
-    // 检查是否有已保存的登录会话
-    if (checkSession()) {
+    // 检查是否有已保存的登录会话；大屏 kiosk 模式无会话时自动只读登录
+    if (!checkSession() && isKioskMode()) kioskLogin();
+    if (currentUser) {
         document.getElementById('login-page').style.display = 'none';
         showApp();
     }
