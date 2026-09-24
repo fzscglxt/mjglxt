@@ -7508,8 +7508,9 @@ window.addEventListener('DOMContentLoaded', () => {
         console.error('加载用户数据失败:', error);
         alert('加载用户数据失败，请检查source/data.js文件。错误信息：' + error.message);
     }
-    // 检查是否有已保存的登录会话；大屏 kiosk 模式无会话时自动只读登录
-    if (!checkSession() && isKioskMode()) kioskLogin();
+    checkSession();
+    // 大屏 kiosk：检测到 kiosk 参数即无条件强制只读 viewer（覆盖任何残留/历史会话，保证大屏永远只读）
+    if (isKioskMode()) kioskLogin();
     if (currentUser) {
         document.getElementById('login-page').style.display = 'none';
         showApp();
