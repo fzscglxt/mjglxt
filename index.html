@@ -3295,15 +3295,13 @@ function showApp() {
         document.body.classList.add('kiosk-mode');
     }
 
-    // 初始化系统
+    updateAlertBadge();
     try {
-        renderDashboard();
+        navigateTo('dashboard');
     } catch (error) {
         console.error('渲染数据看板失败:', error);
         alert('数据看板初始化失败，请刷新页面重试。错误信息：' + error.message);
     }
-    updateAlertBadge();
-    navigateTo('dashboard');
 }
 
 // 权限检查
@@ -3319,6 +3317,36 @@ let charts = {};
 function destroyCharts() {
     Object.values(charts).forEach(c => { try { c.destroy(); } catch(e){} });
     charts = {};
+}
+
+// 图表已存在则仅更新数据（无动画、不销毁），不存在才创建，消除弱机销毁重建造成的空白/闪烁
+function upsertChart(key, canvasId, config) {
+    if (charts[key]) {
+        const c = charts[key];
+        c.data.labels = config.data.labels;
+        (config.data.datasets || []).forEach((nd, i) => {
+            const ds = c.data.datasets[i];
+            if (!ds) return;
+            ds.data = nd.data;
+            if (nd.backgroundColor !== undefined) ds.backgroundColor = nd.backgroundColor;
+            if (nd.label !== undefined) ds.label = nd.label;
+        });
+        c.update('none');
+    } else {
+        charts[key] = new Chart(document.getElementById(canvasId), config);
+    }
+}
+
+// 启动时先用 localStorage 缓存数据填充内存：弱机/弱网下看板首次渲染即有完整内容，避免云端返回前空白
+function hydrateFromCache() {
+    const rd = k => { try { return JSON.parse(localStorage.getItem(STORE_KEYS[k]) || 'null'); } catch(e) { return null; } };
+    let v;
+    v = rd('molds');       if (Array.isArray(v)) molds = v;
+    v = rd('fixtures');    if (Array.isArray(v)) fixtures = v;
+    v = rd('maintenance'); if (Array.isArray(v)) maintenanceRecords = v;
+    v = rd('repairs');     if (Array.isArray(v)) repairRecords = v;
+    v = rd('usage');       if (Array.isArray(v)) usageRecords = v;
+    v = rd('plans');       if (Array.isArray(v)) planRecords = v;
 }
 
 // 获取本地时间的YYYY-MM格式（避免toISOString()时区问题）
@@ -3509,8 +3537,7 @@ function renderDashboard() {
         `).join('');
     }
 
-    // 图表 - 与index.html一致
-    destroyCharts();
+    // 图表 - 复用实例：已存在则 update（无动画），避免弱机销毁重建空白
 
     // Chart: Status distribution (饼图) - 合并模具和工装
     const statusCounts = {};
@@ -3520,7 +3547,7 @@ function renderDashboard() {
     const statusData = Object.values(statusCounts);
     const statusColors = {'正常':'#34a853','保养中':'#1a73e8','维修中':'#ea4335','外协维修':'#ff9800','待保养':'#f9ab00','闲置':'#7c1fa2','报废':'#9aa0a6'};
 
-    charts.status = new Chart(document.getElementById('chart-status'), {
+    upsertChart('status', 'chart-status', {
         type: 'doughnut',
         data: { labels: statusLabels, datasets: [{ data: statusData, backgroundColor: statusLabels.map(s => statusColors[s] || '#ccc'), borderWidth: 0 }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 14, padding: 10 } } } }
@@ -3528,7 +3555,7 @@ function renderDashboard() {
 
     // Chart: Lifetime usage Top10 (横向柱状图)
     const sortedMolds = [...molds].filter(m => m.lifetime > 0).sort((a,b) => lifePercent(b) - lifePercent(a)).slice(0, 10);
-    charts.lifetime = new Chart(document.getElementById('chart-lifetime'), {
+    upsertChart('lifetime', 'chart-lifetime', {
         type: 'bar',
         data: {
             labels: sortedMolds.map(m => m.code),
@@ -3544,7 +3571,7 @@ function renderDashboard() {
     const maintTrend = monthYYYYMM.map(m => maintenanceRecords.filter(r => r.date.startsWith(m)).length);
     const repairTrend = monthYYYYMM.map(m => repairRecords.filter(r => r.date.startsWith(m)).length);
 
-    charts.trend = new Chart(document.getElementById('chart-trend'), {
+    upsertChart('trend', 'chart-trend', {
         type: 'line',
         data: {
             labels: monthLabels,
@@ -3558,7 +3585,7 @@ function renderDashboard() {
 
     // Chart: Repair cost by month (柱状图) - 使用相同的日期筛选逻辑
     const costTrend = monthYYYYMM.map(m => repairRecords.filter(r => r.date.startsWith(m)).reduce((s,r) => s + (Number(r.cost)||0), 0));
-    charts.cost = new Chart(document.getElementById('chart-cost'), {
+    upsertChart('cost', 'chart-cost', {
         type: 'bar',
         data: { labels: monthLabels, datasets: [{ label: '维修费用(元)', data: costTrend, backgroundColor: '#ea4335', borderRadius: 4 }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
@@ -7508,6 +7535,7 @@ window.addEventListener('DOMContentLoaded', () => {
         console.error('加载用户数据失败:', error);
         alert('加载用户数据失败，请检查source/data.js文件。错误信息：' + error.message);
     }
+    hydrateFromCache();
     checkSession();
     // 大屏 kiosk：检测到 kiosk 参数即无条件强制只读 viewer（覆盖任何残留/历史会话，保证大屏永远只读）
     if (isKioskMode()) kioskLogin();
