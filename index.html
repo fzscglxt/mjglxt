@@ -11,6 +11,7 @@
     <script>
     (function(){
       if(!window.Chart){return;}
+      Chart.defaults.animation=false; // 弱硬件/大屏iframe下同步一次性绘制，避免动画帧(rAF)不推进导致看板空白
       Chart.defaults.color='#9db8d2';
       Chart.defaults.borderColor='rgba(157,184,210,0.18)';
       Chart.defaults.font.family="'Microsoft YaHei','PingFang SC',sans-serif";
