@@ -3314,9 +3314,12 @@ function canManageUsers() {
 
 // 数据看板
 let charts = {};
-function destroyCharts() {
-    Object.values(charts).forEach(c => { try { c.destroy(); } catch(e){} });
-    charts = {};
+function destroyCharts(keys) {
+    Object.keys(charts).forEach(k => {
+        if (keys && !keys.includes(k)) return;
+        try { charts[k].destroy(); } catch(e){}
+        delete charts[k];
+    });
 }
 
 // 图表已存在则仅更新数据（无动画、不销毁），不存在才创建，消除弱机销毁重建造成的空白/闪烁
@@ -6892,7 +6895,7 @@ function updateAlertBadge() {
 //  报表统计
 // ============================================================
 function renderReports() {
-    destroyCharts();
+    destroyCharts(['reportMachine','reportMaintType','reportFixtureMachine','reportFixtureMaint']);
 
     // Chart: Machine distribution (饼图)
     const machineCounts = {};
@@ -7520,7 +7523,7 @@ function renderAll() {
     renderRepairTable();
     renderUsageTable();
     renderAlertList();
-    renderReports();
+    // 报表页图表仅在进入报表页时渲染，避免后台建图销毁当前看板图表
     renderUserTable();
     updateAlertBadge();
 }
