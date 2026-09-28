@@ -2569,10 +2569,44 @@ function applyRemoteDB(db) {
         
         // 刷新界面
         if (typeof renderAll === 'function') renderAll();
+        // 数据一致性修复：清理孤立保养计划、补模具模次基线（幂等，可重复执行）
+        if (typeof repairPlanConsistency === 'function') repairPlanConsistency();
     } catch(e) {
         console.warn('applyRemoteDB error', e);
     }
 }
+
+// ============================================================
+//  保养计划数据一致性修复（系统级，幂等）
+//  1) 清理目标模具/工装已不存在的孤立保养计划
+//  2) 为缺失模次基线(lastShots)的模具计划补当前模次，
+//     使“间隔时间 + 生产模次”双维度预警都能正确触发
+// ============================================================
+function repairPlanConsistency() {
+    let changed = false;
+    // 1) 删除目标对象已不存在的孤立保养计划
+    const beforeCount = planRecords.length;
+    planRecords = planRecords.filter(p => {
+        const tt = p.targetType || 'mold';
+        if (tt === 'fixture') return fixtures.some(f => f.id === p.moldId);
+        return molds.some(m => m.id === p.moldId);
+    });
+    if (planRecords.length !== beforeCount) changed = true;
+    // 2) 为缺失模次基线的模具计划补当前模次（从此刻起累计，避免历史误报）
+    planRecords.forEach(p => {
+        if ((p.targetType || 'mold') === 'mold' && (p.lastShots === null || p.lastShots === undefined)) {
+            const m = getMoldById(p.moldId);
+            if (m) { p.lastShots = Number(m.shots) || 0; changed = true; }
+        }
+    });
+    if (changed) {
+        persistPlans();
+        try { if (typeof renderPlanTable === 'function') renderPlanTable(); } catch(e) {}
+        try { if (typeof updateAlertBadge === 'function') updateAlertBadge(); } catch(e) {}
+    }
+    return changed;
+}
+window.repairPlanConsistency = repairPlanConsistency;
 
 const CLOUD_CONFIG = { apiBase: '' };
 
@@ -4470,10 +4504,19 @@ function saveFixture() {
 }
 
 function deleteFixture(id) {
-    showConfirm('确认删除该工装？', () => {
+    showConfirm('确认删除该工装？关联的保养、维修、出入库记录将一并删除。', () => {
         fixtures = fixtures.filter(f => f.id !== id);
-        persistFixtures();
+        // 级联清理该工装关联的保养、维修、出入库、保养计划（备件出入库记录保留）
+        maintenanceRecords = maintenanceRecords.filter(r => !(r.moldId === id && (r.targetType || 'mold') === 'fixture'));
+        repairRecords = repairRecords.filter(r => !(r.moldId === id && (r.targetType || 'mold') === 'fixture'));
+        usageRecords = usageRecords.filter(r => {
+            if (r.recordType === 'spare') return true;
+            return !(r.moldId === id && (r.targetType || 'mold') === 'fixture');
+        });
+        planRecords = planRecords.filter(r => !(r.moldId === id && (r.targetType || 'mold') === 'fixture'));
+        persistFixtures(); persistMaint(); persistRepairs(); persistUsage(); persistPlans();
         renderFixtureTable();
+        updateAlertBadge();
     });
 }
 
@@ -4957,9 +5000,21 @@ function savePlan() {
     };
     if (id) {
         const idx = planRecords.findIndex(p => p.id === id);
-        if (idx >= 0) planRecords[idx] = {...planRecords[idx], ...data};
+        if (idx >= 0) {
+            planRecords[idx] = {...planRecords[idx], ...data};
+            // 历史模具计划若缺模次基线，补当前模具模次（从此刻起累计，避免误报）
+            if ((planRecords[idx].lastShots === null || planRecords[idx].lastShots === undefined) && targetType === 'mold') {
+                const m0 = getMoldById(moldId);
+                if (m0) planRecords[idx].lastShots = Number(m0.shots) || 0;
+            }
+        }
     } else {
         data.id = uid();
+        // 新建模具计划：以当前模具模次为基线，模次预警自计划建立起累计
+        if (targetType === 'mold') {
+            const m0 = getMoldById(moldId);
+            if (m0) data.lastShots = Number(m0.shots) || 0;
+        }
         planRecords.push(data);
     }
     persistPlans();
@@ -5314,12 +5369,42 @@ function resetPlanSearch() {
 window.resetPlanSearch = resetPlanSearch;
 
 function quickAddMaintenance(moldId, type, targetType) {
+    const tt = targetType || 'mold';
     openMaintenanceForm();
     // 用自定义搜索下拉回显模具/工装：写入隐藏值的同时，输入框显示「编号-名称」
-    setMaintMoldById(moldId, targetType || 'mold');
+    setMaintMoldById(moldId, tt);
     document.getElementById('maint-type').value = type;
     document.getElementById('maint-date').value = today();
+    // 从对应保养计划自动带出保养内容（保养内容同步到保养记录，免重复手填）
+    const planContent = getPlanContentFor(moldId, tt, type);
+    if (planContent) document.getElementById('maint-content').value = planContent;
 }
+
+// ============================================================
+//  保养内容同步：从保养计划取出对应模具/工装 + 保养类型的保养内容
+// ============================================================
+// 精确匹配 moldId + targetType + type 的保养计划，返回其保养内容
+function getPlanContentFor(moldId, targetType, type) {
+    const p = planRecords.find(pp =>
+        pp.moldId === moldId &&
+        (pp.targetType || 'mold') === (targetType || 'mold') &&
+        pp.type === type
+    );
+    return (p && p.content) ? p.content : '';
+}
+// 新增保养记录时，若非编辑模式且用户尚未手动编辑内容，则自动带出计划内容
+function maybePrefillMaintContent() {
+    if (window._maintFormEditMode) return;   // 编辑模式：保留记录原内容，不覆盖
+    if (window._maintContentDirty) return;   // 用户已手动输入：不覆盖
+    const moldId = document.getElementById('maint-mold').value;
+    if (!moldId) return;
+    const targetType = document.getElementById('maint-target-type')?.value || 'mold';
+    const type = document.getElementById('maint-type').value;
+    const c = getPlanContentFor(moldId, targetType, type);
+    if (c) document.getElementById('maint-content').value = c;
+}
+window.getPlanContentFor = getPlanContentFor;
+window.maybePrefillMaintContent = maybePrefillMaintContent;
 
 // ============================================================
 //  保养记录
@@ -5363,6 +5448,8 @@ function selectMaintMold(mold) {
     if (list) { list.style.display = 'none'; list.innerHTML = ''; }
     maintMoldActiveIdx = -1;
     maintMoldFiltered = [];
+    // 选中模具/工装后，自动带出对应保养计划的内容（新增且未手动编辑时）
+    try { maybePrefillMaintContent(); } catch(e) {}
 }
 
 // 根据ID回显选中的模具（编辑模式/快捷入口使用）
@@ -5538,6 +5625,9 @@ function showMaintPhotoPreview(src) {
 
 function openMaintenanceForm(id) {
     if (molds.length === 0 && fixtures.length === 0) { alert('请先添加模具或工装'); return; }
+    // 标记当前是新增还是编辑、保养内容是否被手动编辑（用于内容自动带出，避免覆盖）
+    window._maintFormEditMode = !!id;
+    window._maintContentDirty = false;
     // 初始化模具可搜索下拉组件（清空选中+隐藏列表）
     initMaintMoldSearch();
     document.getElementById('maint-id').value = '';
@@ -5574,6 +5664,27 @@ function openMaintenanceForm(id) {
     document.getElementById('maint-modal-title').textContent = id ? '编辑保养记录' : '新增保养记录';
     openModal('modal-maintenance');
 }
+
+// 绑定保养类型切换(change)与保养内容手动输入(input)：
+// 切换保养类型时重新匹配计划带出内容；一旦手动输入则不再自动覆盖
+(function bindMaintContentSyncEvents() {
+    let retries = 0;
+    function bind() {
+        const typeSel = document.getElementById('maint-type');
+        const contentTa = document.getElementById('maint-content');
+        if (!typeSel || !contentTa) {
+            if (++retries < 60) return setTimeout(bind, 50);
+            return;
+        }
+        typeSel.addEventListener('change', () => { try { maybePrefillMaintContent(); } catch(e) {} });
+        contentTa.addEventListener('input', () => { window._maintContentDirty = true; });
+    }
+    if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', bind);
+    } else {
+        bind();
+    }
+})();
 
 function saveMaintenance() {
     const moldId = document.getElementById('maint-mold').value;
@@ -7613,6 +7724,8 @@ window.addEventListener('DOMContentLoaded', () => {
         alert('加载用户数据失败，请检查source/data.js文件。错误信息：' + error.message);
     }
     hydrateFromCache();
+    // 本地/离线兜底：数据一致性修复（幂等；正常联网时 applyRemoteDB 也会执行）
+    try { if (typeof repairPlanConsistency === 'function') repairPlanConsistency(); } catch(e) { console.warn(e); }
     checkSession();
     // 大屏 kiosk：检测到 kiosk 参数即无条件强制只读 viewer（覆盖任何残留/历史会话，保证大屏永远只读）
     if (isKioskMode()) kioskLogin();
