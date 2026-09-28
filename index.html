@@ -4907,7 +4907,7 @@ function fillPlanDefaultsByType() {
         intervalInput.value = 90;
         shotInput.value = 50000;
     } else if (type === '三级保养') {
-        intervalInput.value = 180;
+        intervalInput.value = 365;
         shotInput.value = 100000;
     }
 }
@@ -4987,6 +4987,64 @@ function getPlanDaysLeft(plan) {
     const next = getPlanNextDate(plan);
     if (!next) return null;
     return daysBetween(today(), next);
+}
+
+// 取得保养计划对应的模具或工装对象
+function getPlanTarget(p) {
+    return (p.targetType === 'fixture')
+        ? fixtures.find(f => f.id === p.moldId)
+        : getMoldById(p.moldId);
+}
+// 自上次保养以来已生产模次（工装无模次概念，返回null；无基线时从0起计，避免误报）
+function getPlanUsedShots(p) {
+    if ((p.targetType || 'mold') === 'fixture') return null;
+    const m = getMoldById(p.moldId);
+    if (!m) return null;
+    const cur = Number(m.shots) || 0;
+    if (p.lastShots === null || p.lastShots === undefined) return 0;
+    return Math.max(0, cur - (Number(p.lastShots) || 0));
+}
+// 距模次保养阈值的剩余模次（未设模次间隔返回null）
+function getPlanShotsLeft(p) {
+    const si = Number(p.shotInterval) || 0;
+    if (si <= 0) return null;
+    const used = getPlanUsedShots(p);
+    if (used === null) return null;
+    return si - used;
+}
+// 综合时间间隔与模次间隔，返回最先达到的保养阈值状态（哪个先到先预警）
+function getPlanDueStatus(p) {
+    const target = getPlanTarget(p);
+    if (!target || target.status === '报废') return null;
+    const cand = [];
+    const daysLeft = getPlanDaysLeft(p);
+    const iv = Number(p.intervalDays) || 0;
+    if (daysLeft !== null && iv > 0) {
+        cand.push({ kind: 'time', left: daysLeft, total: iv, ratio: daysLeft / iv });
+    }
+    const shotsLeft = getPlanShotsLeft(p);
+    const si = Number(p.shotInterval) || 0;
+    if (shotsLeft !== null && si > 0) {
+        cand.push({ kind: 'shot', left: shotsLeft, total: si, ratio: shotsLeft / si });
+    }
+    if (!cand.length) return null;
+    // 逾期：剩余为负，取剩余比例最小（最严重）的维度
+    const overdue = cand.filter(c => c.left < 0);
+    if (overdue.length) {
+        overdue.sort((a, b) => a.ratio - b.ratio);
+        return { level: 'danger', c: overdue[0], target };
+    }
+    // 即将到期：时间<=7天，或模次剩余<=10%
+    const soon = [];
+    cand.forEach(c => {
+        if (c.kind === 'time' && c.left <= 7) soon.push(c);
+        if (c.kind === 'shot' && c.left <= Math.max(1, c.total * 0.1)) soon.push(c);
+    });
+    if (soon.length) {
+        soon.sort((a, b) => a.ratio - b.ratio);
+        return { level: 'warning', c: soon[0], target };
+    }
+    return null;
 }
 
 // 读取筛选条件：统一搜索关键词 + 保养类型精确筛选
@@ -5547,9 +5605,15 @@ function saveMaintenance() {
         maintenanceRecords.push(data);
     }
 
-    // 更新对应保养计划的上次保养日期（同时匹配moldId和targetType）
+    // 更新对应保养计划的上次保养日期与模次基线（同时匹配moldId和targetType）
     const plans = planRecords.filter(p => p.moldId === moldId && p.type === data.type && (p.targetType || 'mold') === targetType);
-    plans.forEach(p => { p.lastDate = date; });
+    plans.forEach(p => {
+        p.lastDate = date;
+        if ((p.targetType || 'mold') === 'mold') {
+            const pm = getMoldById(moldId);
+            if (pm) p.lastShots = Number(pm.shots) || 0;
+        }
+    });
     if (plans.length) persistPlans();
 
     // 更新模具/工装状态（待保养 → 正常）
@@ -6794,16 +6858,25 @@ function renderUsageTable() {
 function generateAlerts() {
     const alerts = [];
 
-    // 1. 保养计划到期预警
+    // 1. 保养计划到期预警（时间间隔与模次间隔双阈值，哪个先达到先预警）
     planRecords.forEach(p => {
-        const mold = getMoldById(p.moldId);
-        if (!mold || mold.status === '报废') return;
-        const daysLeft = getPlanDaysLeft(p);
-        if (daysLeft === null) return;
-        if (daysLeft < 0) {
-            alerts.push({ level: 'danger', icon: '🔴', title: `${mold.code} - ${mold.name} 保养已逾期`, desc: `${p.type}已逾期${-daysLeft}天，上次保养：${p.lastDate}`, moldId: p.moldId, action: '执行保养', actionFn: () => quickAddMaintenance(p.moldId, p.type) });
-        } else if (daysLeft <= 7) {
-            alerts.push({ level: 'warning', icon: '🟡', title: `${mold.code} - ${mold.name} 保养即将到期`, desc: `${p.type}将在${daysLeft}天后到期，上次保养：${p.lastDate}`, moldId: p.moldId, action: '执行保养', actionFn: () => quickAddMaintenance(p.moldId, p.type) });
+        const st = getPlanDueStatus(p);
+        if (!st) return;
+        const tc = st.c, target = st.target, tt = p.targetType || 'mold';
+        if (st.level === 'danger') {
+            if (tc.kind === 'time') {
+                alerts.push({ level: 'danger', icon: '🔴', title: `${target.code} - ${target.name} 保养已逾期`, desc: `${p.type}按时间已逾期${-tc.left}天，上次保养：${p.lastDate || '未记录'}`, moldId: p.moldId, targetType: tt, action: '执行保养', actionFn: () => quickAddMaintenance(p.moldId, p.type, tt) });
+            } else {
+                const used = getPlanUsedShots(p);
+                alerts.push({ level: 'danger', icon: '🔴', title: `${target.code} - ${target.name} 已达模次保养阈值`, desc: `${p.type}已生产${(used||0).toLocaleString()}模次，达到${tc.total.toLocaleString()}模次阈值，请安排保养`, moldId: p.moldId, targetType: tt, action: '执行保养', actionFn: () => quickAddMaintenance(p.moldId, p.type, tt) });
+            }
+        } else {
+            if (tc.kind === 'time') {
+                alerts.push({ level: 'warning', icon: '🟡', title: `${target.code} - ${target.name} 保养即将到期`, desc: `${p.type}将在${tc.left}天后到期，上次保养：${p.lastDate || '未记录'}`, moldId: p.moldId, targetType: tt, action: '执行保养', actionFn: () => quickAddMaintenance(p.moldId, p.type, tt) });
+            } else {
+                const used = getPlanUsedShots(p);
+                alerts.push({ level: 'warning', icon: '🟡', title: `${target.code} - ${target.name} 接近模次保养阈值`, desc: `${p.type}已生产${(used||0).toLocaleString()}/${tc.total.toLocaleString()}模次，剩余${tc.left.toLocaleString()}模次即将达到保养阈值`, moldId: p.moldId, targetType: tt, action: '执行保养', actionFn: () => quickAddMaintenance(p.moldId, p.type, tt) });
+            }
         }
     });
 
