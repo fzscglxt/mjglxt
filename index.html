@@ -2592,11 +2592,26 @@ function repairPlanConsistency() {
         return molds.some(m => m.id === p.moldId);
     });
     if (planRecords.length !== beforeCount) changed = true;
-    // 2) 为缺失模次基线的模具计划补当前模次（从此刻起累计，避免历史误报）
+    // 2) 还原模具计划"上次保养时模次"基线（全量重算，可自愈）：
+    //    有上次保养日期 -> 该日期(含)之前的累计入库产量；从未保养 -> 0（全部累计计入用量）
+    //    出入库记录以编号 code 关联（usage.moldId 存编号，plan.moldId 存内部id）
     planRecords.forEach(p => {
-        if ((p.targetType || 'mold') === 'mold' && (p.lastShots === null || p.lastShots === undefined)) {
+        if ((p.targetType || 'mold') === 'mold') {
             const m = getMoldById(p.moldId);
-            if (m) { p.lastShots = Number(m.shots) || 0; changed = true; }
+            if (m && m.code) {
+                const ld = p.lastDate || '';
+                let base = 0;
+                if (ld) {
+                    base = usageRecords
+                        .filter(r => r.recordType !== 'spare'
+                            && (r.targetType || 'mold') === 'mold'
+                            && r.moldId === m.code
+                            && r.direction === 'in'
+                            && r.date <= ld)
+                        .reduce((s, r) => s + (Number(r.shots) || 0), 0);
+                }
+                if (p.lastShots !== base) { p.lastShots = base; changed = true; }
+            }
         }
     });
     if (changed) {
