@@ -6274,7 +6274,7 @@ function renderRepairTable() {
         const mold = targetType === 'fixture'
             ? fixtures.find(f => f.id === r.moldId)
             : getMoldById(r.moldId);
-        if (search && !((mold||{}).(code||{}).toLowerCase().includes(search))) return false;
+        if (search && !(((mold||{}).code||'').toLowerCase().includes(search))) return false;
         if (fLevel && r.level !== fLevel) return false;
         return true;
     }).sort((a,b) => b.date.localeCompare(a.date));
