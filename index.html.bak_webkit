@@ -3554,7 +3554,7 @@ function renderDashboard() {
     document.getElementById('dashboard-date').textContent = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
     // 获取当前选中的时间范围
-    const rangeType = (document.getElementById('dashboard-time-range')||{}).value || '6m';
+    const rangeType = document.getElementById('dashboard-time-range')?.value || '6m';
     const filterMonths = getMonthsByTimeRange(rangeType);
     const monthYYYYMM = filterMonths.map(m => m.yyyymm);
     
@@ -3790,7 +3790,7 @@ function renderUserTable() {
         return;
     }
     tbody.innerHTML = users.map(u => {
-        const isSelf = u.id === (currentUser||{}).id;
+        const isSelf = u.id === currentUser?.id;
         return `<tr>
             <td><strong>${escapeHtml(u.username)}</strong>${isSelf ? ' <span class="badge badge-normal" style="font-size:10px">当前</span>' : ''}</td>
             <td>${escapeHtml(u.fullname)}</td>
@@ -3947,7 +3947,7 @@ function deleteSparePart(id) {
 }
 
 function renderSparePartsTable() {
-    const kw = ((document.getElementById('spare-search')||{}).value || '').trim().toLowerCase();
+    const kw = (document.getElementById('spare-search')?.value || '').trim().toLowerCase();
     const list = spareParts.filter(r => !kw ||
         (r.name || '').toLowerCase().includes(kw) ||
         (r.machine || '').toLowerCase().includes(kw)
@@ -4032,7 +4032,7 @@ function deleteFixtureSparePart(id) {
 }
 
 function renderFixtureSparePartsTable() {
-    const kw = ((document.getElementById('fixture-spare-search')||{}).value || '').trim().toLowerCase();
+    const kw = (document.getElementById('fixture-spare-search')?.value || '').trim().toLowerCase();
     const list = fixtureSpareParts.filter(r => !kw ||
         (r.name || '').toLowerCase().includes(kw) ||
         (r.machine || '').toLowerCase().includes(kw)
@@ -4330,11 +4330,11 @@ function firstMoldPage() { gotoMoldPage(1); }
 function prevMoldPage() { if (moldPage > 1) gotoMoldPage(moldPage - 1); }
 function nextMoldPage() { gotoMoldPage(moldPage + 1); }
 function lastMoldPage() {
-    const search = ((document.getElementById('mold-search')||{}).value || '').toLowerCase();
-    const fStatus = (document.getElementById('mold-filter-status')||{}).value || '';
-    const fWorkshop = (document.getElementById('mold-filter-workshop')||{}).value || '';
+    const search = (document.getElementById('mold-search')?.value || '').toLowerCase();
+    const fStatus = document.getElementById('mold-filter-status')?.value || '';
+    const fWorkshop = document.getElementById('mold-filter-workshop')?.value || '';
     const total = molds.filter(m => {
-        if (search && !((m.code||{}).toLowerCase().includes(search) || (m.name||{}).toLowerCase().includes(search))) return false;
+        if (search && !(m.code?.toLowerCase().includes(search) || m.name?.toLowerCase().includes(search))) return false;
         if (fStatus && m.status !== fStatus) return false;
         if (fWorkshop && (m.workshop || '注塑车间') !== fWorkshop) return false;
         return true;
@@ -4346,11 +4346,11 @@ function jumpMoldPage() {
     if (!input) return;
     let v = parseInt(input.value);
     if (isNaN(v) || v < 1) v = 1;
-    const search = ((document.getElementById('mold-search')||{}).value || '').toLowerCase();
-    const fStatus = (document.getElementById('mold-filter-status')||{}).value || '';
-    const fWorkshop = (document.getElementById('mold-filter-workshop')||{}).value || '';
+    const search = (document.getElementById('mold-search')?.value || '').toLowerCase();
+    const fStatus = document.getElementById('mold-filter-status')?.value || '';
+    const fWorkshop = document.getElementById('mold-filter-workshop')?.value || '';
     const total = molds.filter(m => {
-        if (search && !((m.code||{}).toLowerCase().includes(search) || (m.name||{}).toLowerCase().includes(search))) return false;
+        if (search && !(m.code?.toLowerCase().includes(search) || m.name?.toLowerCase().includes(search))) return false;
         if (fStatus && m.status !== fStatus) return false;
         if (fWorkshop && (m.workshop || '注塑车间') !== fWorkshop) return false;
         return true;
@@ -4364,10 +4364,10 @@ function renderMoldTable() {
     const tbody = document.getElementById('mold-tbody');
     const search = document.getElementById('mold-search').value.toLowerCase();
     const fStatus = document.getElementById('mold-filter-status').value;
-    const fWorkshop = (document.getElementById('mold-filter-workshop')||{}).value || '';
+    const fWorkshop = document.getElementById('mold-filter-workshop')?.value || '';
 
     let filtered = molds.filter(m => {
-        if (search && !((m.code||{}).toLowerCase().includes(search) || (m.name||{}).toLowerCase().includes(search))) return false;
+        if (search && !(m.code?.toLowerCase().includes(search) || m.name?.toLowerCase().includes(search))) return false;
         if (fStatus && m.status !== fStatus) return false;
         if (fWorkshop && (m.workshop || '注塑车间') !== fWorkshop) return false;
         return true;
@@ -4632,11 +4632,11 @@ function firstFixturePage() { gotoFixturePage(1); }
 function prevFixturePage() { if (fixturePage > 1) gotoFixturePage(fixturePage - 1); }
 function nextFixturePage() { gotoFixturePage(fixturePage + 1); }
 function lastFixturePage() {
-    const search = ((document.getElementById('fixture-search')||{}).value || '').toLowerCase();
-    const fStatus = (document.getElementById('fixture-filter-status')||{}).value || '';
-    const fWorkshop = (document.getElementById('fixture-filter-workshop')||{}).value || '';
+    const search = (document.getElementById('fixture-search')?.value || '').toLowerCase();
+    const fStatus = document.getElementById('fixture-filter-status')?.value || '';
+    const fWorkshop = document.getElementById('fixture-filter-workshop')?.value || '';
     const total = fixtures.filter(f => {
-        if (search && !((f.code||{}).toLowerCase().includes(search) || (f.name||{}).toLowerCase().includes(search))) return false;
+        if (search && !(f.code?.toLowerCase().includes(search) || f.name?.toLowerCase().includes(search))) return false;
         if (fStatus && f.status !== fStatus) return false;
         if (fWorkshop && (f.workshop || '装配车间') !== fWorkshop) return false;
         return true;
@@ -4648,11 +4648,11 @@ function jumpFixturePage() {
     if (!input) return;
     let v = parseInt(input.value);
     if (isNaN(v) || v < 1) v = 1;
-    const search = ((document.getElementById('fixture-search')||{}).value || '').toLowerCase();
-    const fStatus = (document.getElementById('fixture-filter-status')||{}).value || '';
-    const fWorkshop = (document.getElementById('fixture-filter-workshop')||{}).value || '';
+    const search = (document.getElementById('fixture-search')?.value || '').toLowerCase();
+    const fStatus = document.getElementById('fixture-filter-status')?.value || '';
+    const fWorkshop = document.getElementById('fixture-filter-workshop')?.value || '';
     const total = fixtures.filter(f => {
-        if (search && !((f.code||{}).toLowerCase().includes(search) || (f.name||{}).toLowerCase().includes(search))) return false;
+        if (search && !(f.code?.toLowerCase().includes(search) || f.name?.toLowerCase().includes(search))) return false;
         if (fStatus && f.status !== fStatus) return false;
         if (fWorkshop && (f.workshop || '装配车间') !== fWorkshop) return false;
         return true;
@@ -4666,10 +4666,10 @@ function renderFixtureTable() {
     const tbody = document.getElementById('fixture-tbody');
     const search = document.getElementById('fixture-search').value.toLowerCase();
     const fStatus = document.getElementById('fixture-filter-status').value;
-    const fWorkshop = (document.getElementById('fixture-filter-workshop')||{}).value || '';
+    const fWorkshop = document.getElementById('fixture-filter-workshop')?.value || '';
 
     let filtered = fixtures.filter(f => {
-        if (search && !((f.code||{}).toLowerCase().includes(search) || (f.name||{}).toLowerCase().includes(search))) return false;
+        if (search && !(f.code?.toLowerCase().includes(search) || f.name?.toLowerCase().includes(search))) return false;
         if (fStatus && f.status !== fStatus) return false;
         if (fWorkshop && (f.workshop || '装配车间') !== fWorkshop) return false;
         return true;
@@ -5008,7 +5008,7 @@ function openPlanForm(id) {
 
 function savePlan() {
     const moldId = document.getElementById('plan-mold').value;
-    const targetType = (document.getElementById('plan-target-type')||{}).value || 'mold';
+    const targetType = document.getElementById('plan-target-type')?.value || 'mold';
     if (!moldId) { alert('请选择模具或工装'); return; }
     const id = document.getElementById('plan-id').value;
     const data = {
@@ -5239,8 +5239,8 @@ function renderPlanTable() {
             ? '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">工装</span>'
             : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
         return `<tr>
-            <td><strong>${typeTag}${_planHighlightText((p.mold||{}).code||'已删除', terms)}</strong></td>
-            <td class="cell-left">${_planHighlightText((p.mold||{}).name||'—', terms)}</td>
+            <td><strong>${typeTag}${_planHighlightText(p.mold?.code||'已删除', terms)}</strong></td>
+            <td class="cell-left">${_planHighlightText(p.mold?.name||'—', terms)}</td>
             <td>${p.type}</td>
             <td>${p.intervalDays}天${p.shotInterval ? ' / ' + p.shotInterval + '模次' : ''}</td>
             <td>${fmtDate(p.lastDate)}</td>
@@ -5420,7 +5420,7 @@ function maybePrefillMaintContent() {
     if (window._maintContentDirty) return;   // 用户已手动输入：不覆盖
     const moldId = document.getElementById('maint-mold').value;
     if (!moldId) return;
-    const targetType = (document.getElementById('maint-target-type')||{}).value || 'mold';
+    const targetType = document.getElementById('maint-target-type')?.value || 'mold';
     const type = document.getElementById('maint-type').value;
     const c = getPlanContentFor(moldId, targetType, type);
     if (c) document.getElementById('maint-content').value = c;
@@ -5710,7 +5710,7 @@ function openMaintenanceForm(id) {
 
 function saveMaintenance() {
     const moldId = document.getElementById('maint-mold').value;
-    const targetType = (document.getElementById('maint-target-type')||{}).value || 'mold';
+    const targetType = document.getElementById('maint-target-type')?.value || 'mold';
     const date = document.getElementById('maint-date').value;
     const content = document.getElementById('maint-content').value.trim();
     if (!moldId) { alert('请选择模具或工装'); return; }
@@ -5784,8 +5784,8 @@ function deleteMaintenance(id) {
 
 function renderMaintenanceTable() {
     const tbody = document.getElementById('maint-tbody');
-    const search = ((document.getElementById('maint-search')||{}).value || '').toLowerCase();
-    const fType = (document.getElementById('maint-filter-type')||{}).value || '';
+    const search = (document.getElementById('maint-search')?.value || '').toLowerCase();
+    const fType = document.getElementById('maint-filter-type')?.value || '';
 
     // 步骤1：搜索 + 类型筛选（排序：日期倒序）
     let filtered = maintenanceRecords.filter(r => {
@@ -5793,8 +5793,8 @@ function renderMaintenanceTable() {
         const mold = targetType === 'fixture'
             ? fixtures.find(f => f.id === r.moldId)
             : getMoldById(r.moldId);
-        if (search && !((mold||{}).code || '').toLowerCase().includes(search)
-                   && !((mold||{}).name || '').toLowerCase().includes(search)) return false;
+        if (search && !(mold?.code || '').toLowerCase().includes(search)
+                   && !(mold?.name || '').toLowerCase().includes(search)) return false;
         // 全部类型时只显示二级保养和三级保养
         if (!fType) {
             if (r.type !== '二级保养' && r.type !== '三级保养') return false;
@@ -5844,8 +5844,8 @@ function renderMaintenanceTable() {
         return `<tr>
             <td>${r.date}</td>
             <td><strong>${typeTag}</strong></td>
-            <td>${escapeHtml((mold||{}).code||'已删除')}</td>
-            <td class="cell-left">${escapeHtml((mold||{}).name||'—')}</td>
+            <td>${escapeHtml(mold?.code||'已删除')}</td>
+            <td class="cell-left">${escapeHtml(mold?.name||'—')}</td>
             <td>${r.type}</td>
             <td title="${escapeHtml(r.content)}">${escapeHtml(r.content.length > 30 ? r.content.slice(0,30)+'...' : r.content)}</td>
             <td>${r.photo ? '<img src="' + r.photo + '" style="width:48px;height:48px;object-fit:cover;border-radius:4px;cursor:pointer;border:1px solid #e0e0e0;" onclick="showMaintPhotoPreview(\'' + r.photo + '\')">' : '—'}</td>
@@ -5968,12 +5968,12 @@ function changeMaintPageSize(size) {
 }
 // 辅助：统计当前筛选条件下保养记录总数（复用 renderMaintenanceTable 同条件）
 function _countFilteredMaintenanceRecords() {
-    const search = ((document.getElementById('maint-search')||{}).value || '').toLowerCase();
-    const fType = (document.getElementById('maint-filter-type')||{}).value || '';
+    const search = (document.getElementById('maint-search')?.value || '').toLowerCase();
+    const fType = document.getElementById('maint-filter-type')?.value || '';
     return maintenanceRecords.filter(r => {
         const mold = getMoldById(r.moldId);
-        if (search && !((mold||{}).code || '').toLowerCase().includes(search)
-                   && !((mold||{}).name || '').toLowerCase().includes(search)) return false;
+        if (search && !(mold?.code || '').toLowerCase().includes(search)
+                   && !(mold?.name || '').toLowerCase().includes(search)) return false;
         if (!fType) {
             if (r.type !== '二级保养' && r.type !== '三级保养') return false;
         } else if (r.type !== fType) {
@@ -6203,7 +6203,7 @@ function openRepairForm(id) {
 
 function saveRepair() {
     const moldId = document.getElementById('repair-mold').value;
-    const targetType = (document.getElementById('repair-target-type')||{}).value || 'mold';
+    const targetType = document.getElementById('repair-target-type')?.value || 'mold';
     const date = document.getElementById('repair-date').value;
     const fault = document.getElementById('repair-fault').value.trim();
     const content = document.getElementById('repair-content').value.trim();
@@ -6274,7 +6274,7 @@ function renderRepairTable() {
         const mold = targetType === 'fixture'
             ? fixtures.find(f => f.id === r.moldId)
             : getMoldById(r.moldId);
-        if (search && !((mold||{}).(code||{}).toLowerCase().includes(search))) return false;
+        if (search && !(mold?.code?.toLowerCase().includes(search))) return false;
         if (fLevel && r.level !== fLevel) return false;
         return true;
     }).sort((a,b) => b.date.localeCompare(a.date));
@@ -6300,8 +6300,8 @@ function renderRepairTable() {
         return `<tr>
             <td>${r.date}</td>
             <td><strong>${typeTag}</strong></td>
-            <td>${escapeHtml((mold||{}).code||'已删除')}</td>
-            <td class="cell-left">${escapeHtml((mold||{}).name||'—')}</td>
+            <td>${escapeHtml(mold?.code||'已删除')}</td>
+            <td class="cell-left">${escapeHtml(mold?.name||'—')}</td>
             <td title="${escapeHtml(r.fault)}">${escapeHtml(r.fault.length > 20 ? r.fault.slice(0,20)+'...' : r.fault)}</td>
             <td title="${escapeHtml(r.cause||'')}">${escapeHtml(r.cause ? (r.cause.length > 15 ? r.cause.slice(0,15)+'...' : r.cause) : '—')}</td>
             <td title="${escapeHtml(r.content)}">${escapeHtml(r.content.length > 20 ? r.content.slice(0,20)+'...' : r.content)}</td>
@@ -6579,7 +6579,7 @@ function openUsageForm(id) {
 
 function updateUsageMoldInfo() {
     const moldId = document.getElementById('usage-mold').value;
-    const targetType = (document.getElementById('usage-target-type')||{}).value || 'mold';
+    const targetType = document.getElementById('usage-target-type')?.value || 'mold';
     if (!moldId) return;
     let mold = null;
     if (targetType === 'fixture') {
@@ -6645,7 +6645,7 @@ function saveUsage() {
     } else {
         // 模具/工装出入库（原有逻辑）
         const moldId = document.getElementById('usage-mold').value;
-        const targetType = (document.getElementById('usage-target-type')||{}).value || 'mold';
+        const targetType = document.getElementById('usage-target-type')?.value || 'mold';
         const date = document.getElementById('usage-date').value;
         const shots = parseInt(document.getElementById('usage-shots').value) || 0;
         if (!moldId) { alert('请选择模具或工装'); return; }
@@ -6900,7 +6900,7 @@ function renderUsageTable() {
         if (r.recordType === 'spare') {
             const list = (r.spareCat === 'mold') ? spareParts : fixtureSpareParts;
             const spare = list.find(s => s.id === r.spareId);
-            if (search && !((spare||{}).name||'').toLowerCase().includes(search)) return false;
+            if (search && !(spare?.name||'').toLowerCase().includes(search)) return false;
             return true;
         }
         const targetType = r.targetType || 'mold';
@@ -6911,11 +6911,11 @@ function renderUsageTable() {
             mold = getMoldById(r.moldId) || molds.find(m => m.code === r.moldId);
         }
         if (search) {
-            const codeText = ((mold||{}).code || r.moldId || '').toLowerCase();
-            const nameText = ((mold||{}).name || '').toLowerCase();
+            const codeText = (mold?.code || r.moldId || '').toLowerCase();
+            const nameText = (mold?.name || '').toLowerCase();
             if (!codeText.includes(search) && !nameText.includes(search)) return false;
         }
-        const dirFilter = (document.getElementById('usage-dir-filter')||{}).value;
+        const dirFilter = document.getElementById('usage-dir-filter')?.value;
         if (dirFilter && r.direction !== dirFilter) return false;
         return true;
     }).sort((a,b) => b.date.localeCompare(a.date));
@@ -6939,7 +6939,7 @@ function renderUsageTable() {
             return `<tr>
                 <td>${r.date}</td>
                 <td><strong>${catTag}${dirTag}</strong></td>
-                <td>${escapeHtml((spare||{}).name||'已删除')}</td>
+                <td>${escapeHtml(spare?.name||'已删除')}</td>
                 <td>—</td>
                 <td>${r.spareDirection === 'out' ? '-' : '+'}${r.spareQty||0}</td>
                 <td>${spare ? (spare.stock||0) : '—'}</td>
@@ -6969,8 +6969,8 @@ function renderUsageTable() {
         return `<tr>
             <td>${r.date}</td>
             <td><strong>${typeTag}${dirTag}</strong></td>
-            <td>${escapeHtml((mold||{}).code||'已删除')}</td>
-            <td class="cell-left">${escapeHtml((mold||{}).name||'—')}</td>
+            <td>${escapeHtml(mold?.code||'已删除')}</td>
+            <td class="cell-left">${escapeHtml(mold?.name||'—')}</td>
             <td>${escapeHtml(r.machine||'—')}</td>
             <td>${(r.shots||0).toLocaleString()}</td>
             <td>${mold ? (mold.shots||0).toLocaleString() : '—'}</td>
@@ -7258,8 +7258,8 @@ function exportPlansCSV() {
     if (planRecords.length === 0) { alert('暂无保养计划数据可导出'); return; }
 
     const columns = [
-        { header: '模具编号', getter: p => ((getMoldById(p.moldId))||{}).code || '已删除' },
-        { header: '模具名称', getter: p => ((getMoldById(p.moldId))||{}).name || '—' },
+        { header: '模具编号', getter: p => getMoldById(p.moldId)?.code || '已删除' },
+        { header: '模具名称', getter: p => getMoldById(p.moldId)?.name || '—' },
         { header: '保养类型', getter: p => p.type || '' },
         { header: '保养间隔(天)', getter: p => p.intervalDays || 0 },
         { header: '模次间隔', getter: p => p.shotInterval || 0 },
@@ -7296,8 +7296,8 @@ function exportMaintenanceCSV() {
 
     const columns = [
         { header: '日期', getter: r => r.date || '' },
-        { header: '模具编号', getter: r => ((getMoldById(r.moldId))||{}).code || '已删除' },
-        { header: '模具名称', getter: r => ((getMoldById(r.moldId))||{}).name || '—' },
+        { header: '模具编号', getter: r => getMoldById(r.moldId)?.code || '已删除' },
+        { header: '模具名称', getter: r => getMoldById(r.moldId)?.name || '—' },
         { header: '保养类型', getter: r => r.type || '' },
         { header: '保养内容', getter: r => r.content || '' },
         { header: '更换配件', getter: r => r.parts || '' },
@@ -7335,8 +7335,8 @@ function exportRepairCSV() {
 
     const columns = [
         { header: '日期', getter: r => r.date || '' },
-        { header: '模具编号', getter: r => ((getMoldById(r.moldId))||{}).code || '已删除' },
-        { header: '模具名称', getter: r => ((getMoldById(r.moldId))||{}).name || '—' },
+        { header: '模具编号', getter: r => getMoldById(r.moldId)?.code || '已删除' },
+        { header: '模具名称', getter: r => getMoldById(r.moldId)?.name || '—' },
         { header: '故障描述', getter: r => r.fault || '' },
         { header: '故障原因', getter: r => r.cause || '' },
         { header: '维修内容', getter: r => r.content || '' },
@@ -7376,8 +7376,8 @@ function exportUsageCSV() {
 
     const columns = [
         { header: '日期', getter: r => r.date || '' },
-        { header: '模具编号', getter: r => ((getMoldById(r.moldId))||{}).code || '已删除' },
-        { header: '模具名称', getter: r => ((getMoldById(r.moldId))||{}).name || '—' },
+        { header: '模具编号', getter: r => getMoldById(r.moldId)?.code || '已删除' },
+        { header: '模具名称', getter: r => getMoldById(r.moldId)?.name || '—' },
         { header: '机台', getter: r => r.machine || '' },
         { header: '生产模次', getter: r => r.shots || 0 },
         { header: '时长(h)', getter: r => r.duration || 0 },
@@ -7418,8 +7418,8 @@ function exportAlertsCSV() {
         { header: '预警级别', getter: a => levelLabels[a.level] || a.level },
         { header: '预警标题', getter: a => a.title || '' },
         { header: '预警描述', getter: a => a.desc || '' },
-        { header: '关联模具编号', getter: a => a.moldId ? (((getMoldById(a.moldId))||{}).code || '已删除') : '—' },
-        { header: '关联模具名称', getter: a => a.moldId ? (((getMoldById(a.moldId))||{}).name || '—') : '—' },
+        { header: '关联模具编号', getter: a => a.moldId ? (getMoldById(a.moldId)?.code || '已删除') : '—' },
+        { header: '关联模具名称', getter: a => a.moldId ? (getMoldById(a.moldId)?.name || '—') : '—' },
         { header: '操作建议', getter: a => a.action || '' }
     ];
 
@@ -7517,8 +7517,8 @@ function exportAllDataExcel() {
         {
             name: '保养计划',
             columns: [
-                { header: '模具编号', getter: p => ((getMoldById(p.moldId))||{}).code || '已删除' },
-                { header: '模具名称', getter: p => ((getMoldById(p.moldId))||{}).name || '—' },
+                { header: '模具编号', getter: p => getMoldById(p.moldId)?.code || '已删除' },
+                { header: '模具名称', getter: p => getMoldById(p.moldId)?.name || '—' },
                 { header: '保养类型', getter: p => p.type || '' },
                 { header: '保养间隔(天)', getter: p => p.intervalDays || 0 },
                 { header: '模次间隔', getter: p => p.shotInterval || 0 },
@@ -7532,8 +7532,8 @@ function exportAllDataExcel() {
             name: '保养记录',
             columns: [
                 { header: '日期', getter: r => r.date || '' },
-                { header: '模具编号', getter: r => ((getMoldById(r.moldId))||{}).code || '已删除' },
-                { header: '模具名称', getter: r => ((getMoldById(r.moldId))||{}).name || '—' },
+                { header: '模具编号', getter: r => getMoldById(r.moldId)?.code || '已删除' },
+                { header: '模具名称', getter: r => getMoldById(r.moldId)?.name || '—' },
                 { header: '保养类型', getter: r => r.type || '' },
                 { header: '保养内容', getter: r => r.content || '' },
                 { header: '更换配件', getter: r => r.parts || '' },
@@ -7548,8 +7548,8 @@ function exportAllDataExcel() {
             name: '维修记录',
             columns: [
                 { header: '日期', getter: r => r.date || '' },
-                { header: '模具编号', getter: r => ((getMoldById(r.moldId))||{}).code || '已删除' },
-                { header: '模具名称', getter: r => ((getMoldById(r.moldId))||{}).name || '—' },
+                { header: '模具编号', getter: r => getMoldById(r.moldId)?.code || '已删除' },
+                { header: '模具名称', getter: r => getMoldById(r.moldId)?.name || '—' },
                 { header: '故障描述', getter: r => r.fault || '' },
                 { header: '故障原因', getter: r => r.cause || '' },
                 { header: '维修内容', getter: r => r.content || '' },
@@ -7566,8 +7566,8 @@ function exportAllDataExcel() {
             name: '出入库记录',
             columns: [
                 { header: '日期', getter: r => r.date || '' },
-                { header: '模具编号', getter: r => ((getMoldById(r.moldId))||{}).code || '已删除' },
-                { header: '模具名称', getter: r => ((getMoldById(r.moldId))||{}).name || '—' },
+                { header: '模具编号', getter: r => getMoldById(r.moldId)?.code || '已删除' },
+                { header: '模具名称', getter: r => getMoldById(r.moldId)?.name || '—' },
                 { header: '机台', getter: r => r.machine || '' },
                 { header: '产品名称', getter: r => r.product || '' },
                 { header: '生产模次', getter: r => r.shots || 0 },
@@ -7583,8 +7583,8 @@ function exportAllDataExcel() {
                 { header: '预警级别', getter: a => ({ danger: '紧急', warning: '警告', info: '提示' })[a.level] || a.level },
                 { header: '预警标题', getter: a => a.title || '' },
                 { header: '预警描述', getter: a => a.desc || '' },
-                { header: '关联模具编号', getter: a => a.moldId ? (((getMoldById(a.moldId))||{}).code || '已删除') : '—' },
-                { header: '关联模具名称', getter: a => a.moldId ? (((getMoldById(a.moldId))||{}).name || '—') : '—' },
+                { header: '关联模具编号', getter: a => a.moldId ? (getMoldById(a.moldId)?.code || '已删除') : '—' },
+                { header: '关联模具名称', getter: a => a.moldId ? (getMoldById(a.moldId)?.name || '—') : '—' },
                 { header: '操作建议', getter: a => a.action || '' }
             ],
             data: generateAlerts()
