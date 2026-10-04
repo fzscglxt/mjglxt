@@ -8,6 +8,210 @@
     <meta http-equiv="Expires" content="0">
     <title>模具管理系统</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+/*!
+ * fz_data_labels.js — Chart.js v4 常驻数据标签插件（零额外 CDN 依赖，canvas fillText 实现）
+ * 支持：垂直 / 水平 bar（含堆叠、含负值）、line（多系列）、pie、doughnut
+ * 用法：Chart.register(FzDataLabels)（本文件加载后已自动全局注册）
+ *   - 整图关闭：options.plugins.fzDataLabels = { display:false }
+ *   - 单系列关闭：dataset.fzDataLabels = false
+ *   - 饼/环显示百分比：options.plugins.fzDataLabels = { showPercent:true }
+ */
+(function (global) {
+  'use strict';
+  if (!global.Chart) { return; }
+
+  var PLUGIN_ID = 'fzDataLabels';
+
+  var DEFAULTS = {
+    display: true,
+    color: '#eaf2ff',        // 柱顶 / 折点 / 外侧标签颜色（深色背景）
+    insideColor: '#ffffff',  // 堆叠段内 / 饼块内标签颜色
+    fontSize: 11,
+    fontWeight: '600',
+    skipZero: true,          // 0 值不显示
+    showPercent: false,      // 饼 / 环是否附带百分比
+    percentDecimals: 1,
+    valueDecimals: null,     // null = 自动（整数不带小数，非整数最多 2 位去 0）
+    barOffset: 4,
+    lineOffset: 6,
+    minBarPx: 14,            // 堆叠段内标签：段宽 / 高小于此值不标
+    minArcDeg: 16            // 饼块内标签：圆心角小于此值不标
+  };
+
+  function mergeOptions(opts) {
+    var o = {};
+    for (var k in DEFAULTS) { o[k] = DEFAULTS[k]; }
+    if (opts) { for (var k2 in opts) { if (opts[k2] !== undefined) o[k2] = opts[k2]; } }
+    return o;
+  }
+
+  function fmtNumber(v, o) {
+    if (v == null || isNaN(v)) { return ''; }
+    var n = Number(v);
+    if (o.valueDecimals != null) { return n.toFixed(o.valueDecimals); }
+    if (Math.abs(n - Math.round(n)) < 1e-9) { return String(Math.round(n)); }
+    return String(Math.round(n * 100) / 100);
+  }
+
+  function dsEnabled(ds) {
+    return ds[PLUGIN_ID] !== false;
+  }
+
+  function drawText(ctx, str, x, y, align, color) {
+    ctx.textAlign = align;
+    ctx.fillStyle = color;
+    ctx.fillText(str, x, y);
+  }
+
+  function fontPx(ctx) {
+    var m = /(\d+)px/.exec(ctx.font);
+    return m ? Number(m[1]) : 11;
+  }
+
+  function drawMulti(ctx, str, x, y, align, color) {
+    var lines = String(str).split('\n');
+    var lh = fontPx(ctx) + 2;
+    var startY = y - (lines.length - 1) * lh / 2;
+    ctx.textAlign = align;
+    ctx.fillStyle = color;
+    for (var i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], x, startY + i * lh);
+    }
+  }
+
+  function drawVBar(chart, ctx, dsList, o) {
+    var stacked = !!(chart.options.scales && chart.options.scales.y && chart.options.scales.y.stacked === true);
+    for (var di = 0; di < dsList.length; di++) {
+      if (!dsEnabled(dsList[di])) { continue; }
+      var meta = chart.getDatasetMeta(di);
+      if (meta.hidden || meta.type !== 'bar') { continue; }
+      var elems = meta.data;
+      for (var i = 0; i < elems.length; i++) {
+        var el = elems[i];
+        var num = Number(dsList[di].data[i]);
+        if (isNaN(num) || (o.skipZero && num === 0)) { continue; }
+        if (stacked) {
+          var h = Math.abs(el.base - el.y);
+          if (h < o.minBarPx) { continue; }
+          drawText(ctx, fmtNumber(num, o), el.x, (el.y + el.base) / 2, 'center', o.insideColor);
+        } else if (num < 0) {
+          drawText(ctx, fmtNumber(num, o), el.x, el.base + o.barOffset, 'center', o.color);
+        } else {
+          drawText(ctx, fmtNumber(num, o), el.x, el.y - o.barOffset, 'center', o.color);
+        }
+      }
+    }
+  }
+
+  function drawHBar(chart, ctx, dsList, o) {
+    var stacked = !!(chart.options.scales && chart.options.scales.x && chart.options.scales.x.stacked === true);
+    for (var di = 0; di < dsList.length; di++) {
+      if (!dsEnabled(dsList[di])) { continue; }
+      var meta = chart.getDatasetMeta(di);
+      if (meta.hidden || meta.type !== 'bar') { continue; }
+      var elems = meta.data;
+      for (var i = 0; i < elems.length; i++) {
+        var el = elems[i];
+        var num = Number(dsList[di].data[i]);
+        if (isNaN(num) || (o.skipZero && num === 0)) { continue; }
+        if (stacked) {
+          var label = fmtNumber(num, o);
+          var w = Math.abs(el.x - el.base);
+          if (w < o.minBarPx || w < ctx.measureText(label).width + 8) { continue; }
+          drawText(ctx, label, (el.x + el.base) / 2, el.y, 'center', o.insideColor);
+        } else if (num < 0) {
+          drawText(ctx, fmtNumber(num, o), el.base - o.barOffset, el.y, 'right', o.color);
+        } else {
+          drawText(ctx, fmtNumber(num, o), el.x + o.barOffset, el.y, 'left', o.color);
+        }
+      }
+    }
+  }
+
+  function drawLine(chart, ctx, dsList, o) {
+    for (var di = 0; di < dsList.length; di++) {
+      if (!dsEnabled(dsList[di])) { continue; }
+      var meta = chart.getDatasetMeta(di);
+      if (meta.hidden || meta.type !== 'line') { continue; }
+      var elems = meta.data;
+      for (var i = 0; i < elems.length; i++) {
+        var el = elems[i];
+        var num = Number(dsList[di].data[i]);
+        if (isNaN(num) || (o.skipZero && num === 0)) { continue; }
+        drawText(ctx, fmtNumber(num, o), el.x, el.y - o.lineOffset, 'center', o.color);
+      }
+    }
+  }
+
+  function drawPie(chart, ctx, dsList, o) {
+    for (var di = 0; di < dsList.length; di++) {
+      if (!dsEnabled(dsList[di])) { continue; }
+      var meta = chart.getDatasetMeta(di);
+      if (meta.hidden) { continue; }
+      var elems = meta.data;
+      var data = dsList[di].data;
+      var total = 0;
+      for (var k = 0; k < data.length; k++) {
+        var t0 = Number(data[k]);
+        if (!isNaN(t0) && t0 > 0) { total += t0; }
+      }
+      for (var i = 0; i < elems.length; i++) {
+        var arc = elems[i];
+        var num = Number(data[i]);
+        if (isNaN(num) || (o.skipZero && num === 0)) { continue; }
+        var props = arc.getProps(['startAngle', 'endAngle', 'innerRadius', 'outerRadius'], true);
+        var deg = (props.endAngle - props.startAngle) * 180 / Math.PI;
+        if (deg < o.minArcDeg) { continue; }
+        var radial = props.outerRadius - props.innerRadius;
+        var pos = arc.tooltipPosition();
+        var label = fmtNumber(num, o);
+        var twoLines = false;
+        if (o.showPercent && total > 0) {
+          var pct = Math.round(num / total * 1000) / 10;
+          label = label + '\n' + pct.toFixed(o.percentDecimals) + '%';
+          twoLines = true;
+        }
+        if (radial < (twoLines ? o.fontSize * 2.6 : o.fontSize + 6)) { continue; }
+        drawMulti(ctx, label, pos.x, pos.y, 'center', o.insideColor);
+      }
+    }
+  }
+
+  var plugin = {
+    id: PLUGIN_ID,
+    afterDatasetsDraw: function (chart, args, options) {
+      var o = mergeOptions(options);
+      if (o.display === false) { return; }
+      var type = chart.config.type;
+      var ctx = chart.ctx;
+      ctx.save();
+      ctx.font = o.fontWeight + ' ' + o.fontSize + 'px "Segoe UI","Microsoft YaHei",Arial,sans-serif';
+      ctx.textBaseline = 'middle';
+      var dsList = chart.data.datasets;
+      if (type === 'pie' || type === 'doughnut') {
+        drawPie(chart, ctx, dsList, o);
+      } else if (type === 'bar') {
+        if (chart.options.indexAxis === 'y') { drawHBar(chart, ctx, dsList, o); }
+        else { drawVBar(chart, ctx, dsList, o); }
+      } else if (type === 'line') {
+        drawLine(chart, ctx, dsList, o);
+      }
+      ctx.restore();
+    }
+  };
+
+  // 全局注册（重复加载时先注销旧实例）
+  if (global.__fzDlInstalled) {
+    try { global.Chart.unregister(global.__fzDlInstalled); } catch (e) {}
+  }
+  global.Chart.register(plugin);
+  global.__fzDlInstalled = plugin;
+  global.FzDataLabels = plugin;
+})(window);
+
+</script>
+
     <script>
     (function(){
       if(!window.Chart){return;}
