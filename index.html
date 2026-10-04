@@ -165,15 +165,22 @@
         if (deg < o.minArcDeg) { continue; }
         var radial = props.outerRadius - props.innerRadius;
         var pos = arc.tooltipPosition();
-        var label = fmtNumber(num, o);
-        var twoLines = false;
-        if (o.showPercent && total > 0) {
+        var valLabel = fmtNumber(num, o);
+        // 满圆饼图默认附带百分比（占比语义），环形默认只显示数值；显式配置优先
+        var wantPercent = (o.showPercent !== undefined && o.showPercent !== null)
+          ? o.showPercent
+          : (meta.type === 'pie');
+        var pctLabel = '';
+        if (wantPercent && total > 0) {
           var pct = Math.round(num / total * 1000) / 10;
-          label = label + '\n' + pct.toFixed(o.percentDecimals) + '%';
-          twoLines = true;
+          pctLabel = pct.toFixed(o.percentDecimals) + '%';
         }
-        if (radial < (twoLines ? o.fontSize * 2.6 : o.fontSize + 6)) { continue; }
-        drawMulti(ctx, label, pos.x, pos.y, 'center', o.insideColor);
+        var twoH = o.fontSize * 2.6, oneH = o.fontSize + 6;
+        if (pctLabel && radial >= twoH) {
+          drawMulti(ctx, valLabel + '\n' + pctLabel, pos.x, pos.y, 'center', o.insideColor);
+        } else if (radial >= oneH) {
+          drawText(ctx, valLabel, pos.x, pos.y, 'center', o.insideColor);
+        }
       }
     }
   }
@@ -211,8 +218,7 @@
 })(window);
 
 </script>
-
-    <script>
+<script>
     (function(){
       if(!window.Chart){return;}
       Chart.defaults.animation=false; // 弱硬件/大屏iframe下同步一次性绘制，避免动画帧(rAF)不推进导致看板空白
