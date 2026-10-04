@@ -7969,10 +7969,8 @@ window.addEventListener('DOMContentLoaded', () => {
       var v = target.value || '';
       if (dir === 'left') { if (target.selectionStart > 0) return; }
       else if (dir === 'right') { if (target.selectionEnd < v.length) return; }
-      else if (dir === 'up') { if (v.slice(0, target.selectionStart).indexOf('
-') !== -1) return; }
-      else if (dir === 'down') { if (v.slice(target.selectionEnd).indexOf('
-') !== -1) return; }
+      else if (dir === 'up') { if (v.slice(0, target.selectionStart).indexOf('\n') !== -1) return; }
+      else if (dir === 'down') { if (v.slice(target.selectionEnd).indexOf('\n') !== -1) return; }
     }
     // number / date / time / datetime-local / select：方向键一律跳格
 
@@ -8000,6 +7998,7 @@ ArrowNav.boot({
   containers:['#modal-mold','#modal-fixture','#modal-maintenance','#modal-repair','#modal-usage','#modal-plan']
 });
 </script>
+<!-- ArrowNav end -->
 <!-- ArrowNav end -->
 </body>
 </html>
