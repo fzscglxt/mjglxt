@@ -7757,6 +7757,250 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 </script>
+<!-- ArrowNav injected -->
+<style>
+.kbd-active{background:#2563eb !important;color:#fff !important;}.kbd-active *{color:#fff !important;}
+</style>
+<script>
+/*!
+ * ArrowNav —— 录入表单方向键空间导航（通用、无依赖）
+ * 用法：ArrowNav.boot({ containers:['#容器','#弹窗'], dropdowns:[ ...可选项 ] });
+ * - 基于控件几何中心做 ↑ ↓ ← → 空间导航，不依赖严格表格 DOM；
+ * - 文本框：光标到达首/尾边界才跳格，否则移动文字光标；
+ * - textarea：首行/末行才上下跳格；
+ * - number / date / time / datetime-local / select：方向键直接跳格；
+ * - dropdowns：自定义建议下拉的键盘导航（↑↓ 高亮、Enter 选中、Esc 关闭）。
+ */
+(function () {
+  if (window.ArrowNav && window.ArrowNav.__installed) return;
+
+  var FIELD_SEL = 'input, select, textarea';
+  var SKIP_TYPES = { hidden:1, button:1, submit:1, reset:1, checkbox:1, radio:1, image:1, file:1 };
+
+  var containers = [];
+  var dropdowns = [];
+
+  function typeOf(el) {
+    if (el && el.tagName === 'TEXTAREA') return 'textarea';
+    if (el && el.tagName === 'SELECT') return 'select';
+    return String((el && el.type) || 'text').toLowerCase();
+  }
+
+  function isFieldVisible(el) {
+    if (!el) return false;
+    if (el.disabled || el.readOnly) return false;
+    var t = typeOf(el);
+    if (SKIP_TYPES[t]) return false;
+    var r = el.getBoundingClientRect();
+    if (r.width <= 1 || r.height <= 1) return false;
+    var p = el;
+    while (p && p !== document.body) {
+      var cs = window.getComputedStyle(p);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+      p = p.parentElement;
+    }
+    return true;
+  }
+
+  function getFields(root) {
+    return Array.prototype.slice.call(root.querySelectorAll(FIELD_SEL)).filter(isFieldVisible);
+  }
+
+  function R(el) {
+    var r = el.getBoundingClientRect();
+    return { el:el, l:r.left, t:r.top, w:r.width, h:r.height,
+      cx:r.left + r.width / 2, cy:r.top + r.height / 2 };
+  }
+
+  function nearest(arr, score) {
+    var best = null, bs = Infinity;
+    for (var i = 0; i < arr.length; i++) {
+      var s = score(arr[i]);
+      if (s < bs) { bs = s; best = arr[i]; }
+    }
+    return best;
+  }
+
+  function moveFocus(cur, root, dir) {
+    var fields = getFields(root);
+    if (fields.length < 2) return false;
+    var rs = fields.map(R);
+    var c = null;
+    for (var i = 0; i < rs.length; i++) { if (rs[i].el === cur) { c = rs[i]; } }
+    if (!c) return false;
+    var rowTol = Math.max(12, c.h * 0.6);
+    var widths = rs.map(function (x) { return x.w; }).sort(function (a, b) { return a - b; });
+    var medW = widths[Math.floor(widths.length / 2)] || 0;
+    var isWide = function (x) { return medW > 0 && x.w > medW * 1.6; };
+    var target = null;
+
+    if (dir === 'right') {
+      var rSame = rs.filter(function (x) { return x !== c && Math.abs(x.cy - c.cy) <= rowTol && x.cx > c.cx; });
+      if (rSame.length) {
+        target = nearest(rSame, function (x) { return x.cx - c.cx; });
+      } else {
+        var below = rs.filter(function (x) { return x.cy > c.cy + rowTol; });
+        if (below.length) {
+          var nr = nearest(below, function (x) { return x.cy; });
+          var row = below.filter(function (x) { return Math.abs(x.cy - nr.cy) <= rowTol; });
+          target = nearest(row, function (x) { return x.cx; });
+        }
+      }
+    } else if (dir === 'left') {
+      var lSame = rs.filter(function (x) { return x !== c && Math.abs(x.cy - c.cy) <= rowTol && x.cx < c.cx; });
+      if (lSame.length) {
+        target = nearest(lSame, function (x) { return c.cx - x.cx; });
+      } else {
+        var above = rs.filter(function (x) { return x.cy < c.cy - rowTol; });
+        if (above.length) {
+          var pr = nearest(above, function (x) { return -x.cy; });
+          var row2 = above.filter(function (x) { return Math.abs(x.cy - pr.cy) <= rowTol; });
+          target = nearest(row2, function (x) { return -x.cx; });
+        }
+      }
+    } else if (dir === 'down') {
+      var colTol = Math.max(20, c.w * 0.6, c.h * 1.1);
+      var below2 = rs.filter(function (x) { return x !== c && x.cy > c.cy + rowTol * 0.4; });
+      var sameCol = below2.filter(function (x) { return Math.abs(x.cx - c.cx) <= colTol && !isWide(x); });
+      if (sameCol.length) {
+        target = nearest(sameCol, function (x) { return x.cy - c.cy; });
+      } else if (below2.length) {
+        var nr2 = nearest(below2, function (x) { return x.cy; });
+        var inRow = below2.filter(function (x) { return Math.abs(x.cy - nr2.cy) <= rowTol; });
+        target = nearest(inRow, function (x) { return Math.abs(x.cx - c.cx); });
+      }
+    } else if (dir === 'up') {
+      var colTol2 = Math.max(20, c.w * 0.6, c.h * 1.1);
+      var above2 = rs.filter(function (x) { return x !== c && x.cy < c.cy - rowTol * 0.4; });
+      var sameCol2 = above2.filter(function (x) { return Math.abs(x.cx - c.cx) <= colTol2 && !isWide(x); });
+      if (sameCol2.length) {
+        target = nearest(sameCol2, function (x) { return c.cy - x.cy; });
+      } else if (above2.length) {
+        var pr2 = nearest(above2, function (x) { return -x.cy; });
+        var inRow2 = above2.filter(function (x) { return Math.abs(x.cy - pr2.cy) <= rowTol; });
+        target = nearest(inRow2, function (x) { return Math.abs(x.cx - c.cx); });
+      }
+    }
+
+    if (target && target.el) { target.el.focus(); return true; }
+    return false;
+  }
+
+  function activeDropdownFor(target) {
+    for (var i = 0; i < dropdowns.length; i++) {
+      var d = dropdowns[i];
+      var input = document.querySelector(d.inputSelector);
+      var panel = document.querySelector(d.panelSelector);
+      if (!input || !panel) continue;
+      if (target !== input) continue;
+      if (!d.isOpen(panel)) continue;
+      return { d:d, input:input, panel:panel };
+    }
+    return null;
+  }
+
+  function itemsOf(ctx) {
+    return Array.prototype.slice.call(ctx.panel.querySelectorAll(ctx.d.itemSelector));
+  }
+
+  function currentIndex(items, ac) {
+    for (var i = 0; i < items.length; i++) { if (items[i].classList.contains(ac)) return i; }
+    return -1;
+  }
+
+  document.addEventListener('keydown', function (e) {
+    var target = e.target;
+    if (!target || !target.closest) return;
+
+    var root = null;
+    for (var i = 0; i < containers.length; i++) {
+      if (containers[i].el && containers[i].el.contains(target)) { root = containers[i].el; break; }
+    }
+    if (!root) return;
+
+    var key = e.key;
+    var isArrow = (key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight');
+
+    // 1) 自定义建议下拉键盘导航
+    var ctx = activeDropdownFor(target);
+    if (ctx) {
+      var items = itemsOf(ctx);
+      var ac = ctx.d.activeClass || 'kbd-active';
+      if (key === 'ArrowDown' || key === 'ArrowUp') {
+        e.preventDefault();
+        if (!items.length) return;
+        var idx = currentIndex(items, ac);
+        if (key === 'ArrowDown') { idx = (idx < 0) ? 0 : (idx + 1) % items.length; }
+        else { idx = (idx < 0) ? items.length - 1 : (idx - 1 + items.length) % items.length; }
+        items.forEach(function (it) { it.classList.remove(ac); });
+        items[idx].classList.add(ac);
+        if (items[idx].scrollIntoView) items[idx].scrollIntoView({ block:'nearest' });
+        return;
+      }
+      if (key === 'Enter') {
+        if (items.length) {
+          e.preventDefault();
+          var ci = currentIndex(items, ac);
+          var el = items[ci < 0 ? 0 : ci];
+          if (ctx.d.onPick) ctx.d.onPick(el);
+        }
+        return;
+      }
+      if (key === 'Escape') {
+        e.preventDefault();
+        if (ctx.d.onClose) ctx.d.onClose(ctx.panel);
+        return;
+      }
+    }
+
+    if (!isArrow) return;
+
+    var t = typeOf(target);
+    var dir = key === 'ArrowUp' ? 'up' : key === 'ArrowDown' ? 'down' : key === 'ArrowLeft' ? 'left' : 'right';
+
+    // 2) 文本类：仅边界跳格
+    if (t === 'text' || t === 'search' || t === 'url' || t === 'tel' || t === 'email' || t === 'password') {
+      if (dir === 'left') {
+        if (target.selectionStart > 0 || target.selectionEnd > 0) return;
+      } else if (dir === 'right') {
+        if (target.selectionEnd < (target.value || '').length) return;
+      }
+    } else if (t === 'textarea') {
+      var v = target.value || '';
+      if (dir === 'left') { if (target.selectionStart > 0) return; }
+      else if (dir === 'right') { if (target.selectionEnd < v.length) return; }
+      else if (dir === 'up') { if (v.slice(0, target.selectionStart).indexOf('
+') !== -1) return; }
+      else if (dir === 'down') { if (v.slice(target.selectionEnd).indexOf('
+') !== -1) return; }
+    }
+    // number / date / time / datetime-local / select：方向键一律跳格
+
+    e.preventDefault();
+    moveFocus(target, root, dir);
+  }, false);
+
+  window.ArrowNav = {
+    __installed: true,
+    boot: function (cfg) {
+      cfg = cfg || {};
+      (cfg.containers || []).forEach(function (sel) {
+        Array.prototype.slice.call(document.querySelectorAll(sel)).forEach(function (el) {
+          var exists = containers.some(function (c) { return c.el === el; });
+          if (!exists) containers.push({ el:el });
+        });
+      });
+      (cfg.dropdowns || []).forEach(function (d) { dropdowns.push(d); });
+      return this;
+    }
+  };
+})();
+
+ArrowNav.boot({
+  containers:['#modal-mold','#modal-fixture','#modal-maintenance','#modal-repair','#modal-usage','#modal-plan']
+});
+</script>
+<!-- ArrowNav end -->
 </body>
 </html>
 
