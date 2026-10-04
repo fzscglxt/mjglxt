@@ -11,7 +11,7 @@
 <script>
 /*!
  * fz_data_labels.js — Chart.js v4 常驻数据标签插件（零额外 CDN 依赖，canvas fillText 实现）
- * 支持：垂直 / 水平 bar（含堆叠、含负值）、line（多系列）、pie、doughnut
+ * 支持：垂直 / 水平 bar（含堆叠、含负值）、line（多系列）、pie、doughnut、polarArea
  * 用法：Chart.register(FzDataLabels)（本文件加载后已自动全局注册）
  *   - 整图关闭：options.plugins.fzDataLabels = { display:false }
  *   - 单系列关闭：dataset.fzDataLabels = false
@@ -196,7 +196,7 @@
       ctx.font = o.fontWeight + ' ' + o.fontSize + 'px "Segoe UI","Microsoft YaHei",Arial,sans-serif';
       ctx.textBaseline = 'middle';
       var dsList = chart.data.datasets;
-      if (type === 'pie' || type === 'doughnut') {
+      if (type === 'pie' || type === 'doughnut' || type === 'polarArea') {
         drawPie(chart, ctx, dsList, o);
       } else if (type === 'bar') {
         if (chart.options.indexAxis === 'y') { drawHBar(chart, ctx, dsList, o); }
