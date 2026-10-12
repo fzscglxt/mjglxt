@@ -7203,7 +7203,7 @@ function renderUsageTable() {
         </tr>`;
     };
 
-    const renderCycle = (c) => {
+    const renderCycle = (c, cumShots) => {
         const o = c.out, n = c.in;
         const r = n || o;
         const tt = r.targetType || 'mold';
@@ -7247,7 +7247,7 @@ function renderUsageTable() {
             + '<td class="cell-left">' + typeTag + escapeHtml((mold||{}).name || '—') + '</td>'
             + '<td>' + escapeHtml(machine || '—') + '</td>'
             + '<td>' + shots.toLocaleString() + '</td>'
-            + '<td>' + (mold ? (mold.shots||0).toLocaleString() : '—') + '</td>'
+            + '<td>' + (cumShots||0).toLocaleString() + '</td>'
             + '<td>' + (dur || 0) + '</td>'
             + '<td>' + escapeHtml(op || '—') + '</td>'
             + noteCell
@@ -7255,11 +7255,38 @@ function renderUsageTable() {
             + '</tr>';
     };
 
+    // 基于全量记录计算每副模具/工装逐周期(按入库时点)的累计模次快照，使累计列随生产模次递增
+    const cumMap = {};
+    (function(){
+        const allC = pairUsage(usageRecords.filter(r => r.recordType !== 'spare'));
+        const byMold = {};
+        allC.forEach(c => {
+            const r = c.in || c.out;
+            const k = (r.targetType || 'mold') + '|' + r.moldId;
+            (byMold[k] = byMold[k] || []).push(c);
+        });
+        Object.keys(byMold).forEach(k => {
+            const arr = byMold[k].slice().sort((a,b) => {
+                const da = a.in ? a.in.date : a.out.date;
+                const db = b.in ? b.in.date : b.out.date;
+                if (da !== db) return da < db ? -1 : 1;
+                if ((a.in?1:0) !== (b.in?1:0)) return a.in ? -1 : 1;
+                return 0;
+            });
+            let total = 0;
+            arr.forEach(c => {
+                const sh = c.in ? (c.in.shots||0) : (c.out ? (c.out.shots||0) : 0);
+                total += sh;
+                cumMap[c.out ? c.out.id : c.in.id] = total;
+            });
+        });
+    })();
+
     const spareRows = filtered.filter(r => r.recordType === 'spare');
     const cycles = pairUsage(filtered.filter(r => r.recordType !== 'spare'));
     const rows = [];
     spareRows.forEach(r => rows.push({ d: r.date, html: renderSpare(r) }));
-    cycles.forEach(c => rows.push({ d: c.in ? c.in.date : c.out.date, html: renderCycle(c) }));
+    cycles.forEach(c => rows.push({ d: c.in ? c.in.date : c.out.date, html: renderCycle(c, cumMap[c.out ? c.out.id : c.in.id] || 0) }));
     rows.sort((a,b) => b.d.localeCompare(a.d));
 
     if (rows.length === 0) {
