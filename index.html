@@ -1909,9 +1909,9 @@ input[type=file]::file-selector-button:hover{background:var(--primary-light);col
                     <div class="filter-bar">
                         <div class="search-box"><input type="text" id="usage-search" placeholder="搜索模具编号..." oninput="renderUsageTable()"></div>
                         <select id="usage-dir-filter" onchange="renderUsageTable()" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px">
-                            <option value="">全部类型</option>
-                            <option value="out">出库</option>
-                            <option value="in">入库</option>
+                            <option value="">全部</option>
+                            <option value="mold">模具</option>
+                            <option value="fixture">工装</option>
                         </select>
                     </div>
                     <div class="table-wrap">
@@ -7107,6 +7107,11 @@ function renderUsageTable() {
     const search = document.getElementById('usage-search').value.toLowerCase();
 
     let filtered = usageRecords.filter(r => {
+        const typeFilter = (document.getElementById('usage-dir-filter')||{}).value;
+        const recCat = r.recordType === 'spare'
+            ? (r.spareCat === 'mold' ? 'mold' : 'fixture')
+            : ((r.targetType || 'mold') === 'fixture' ? 'fixture' : 'mold');
+        if (typeFilter && recCat !== typeFilter) return false;
         if (r.recordType === 'spare') {
             const list = (r.spareCat === 'mold') ? spareParts : fixtureSpareParts;
             const spare = list.find(s => s.id === r.spareId);
@@ -7125,8 +7130,6 @@ function renderUsageTable() {
             const nameText = ((mold||{}).name || '').toLowerCase();
             if (!codeText.includes(search) && !nameText.includes(search)) return false;
         }
-        const dirFilter = (document.getElementById('usage-dir-filter')||{}).value;
-        if (dirFilter && r.direction !== dirFilter) return false;
         return true;
     }).sort((a,b) => b.date.localeCompare(a.date));
 
