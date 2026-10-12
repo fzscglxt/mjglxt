@@ -6922,6 +6922,23 @@ function deleteUsage(id) {
     });
 }
 
+// 删除整个使用周期：同时删除其出库与入库两条记录，并重算台账累计模次
+function deleteUsageCycle(outId, inId) {
+    showConfirm('确认删除该使用周期？将同时删除其出库与入库记录，台账累计模次将回退。', () => {
+        const ids = [outId, inId].filter(Boolean);
+        let tt = null, code = null;
+        ids.forEach(id => {
+            const r = usageRecords.find(x => x.id === id);
+            if (r && r.recordType !== 'spare') { tt = r.targetType || 'mold'; code = r.moldId; }
+        });
+        usageRecords = usageRecords.filter(r => !ids.includes(r.id));
+        if (tt && code) recalcLedgerShots(tt, code);
+        persistUsage();
+        renderUsageTable();
+        if (typeof updateAlertBadge === 'function') updateAlertBadge();
+    });
+}
+
 // ============================================================
 // 出入库"使用周期"自动重建（与 functions/api/db.js 中算法保持一致）
 // 规则：①换模/换工装 → 旧件入库、新件出库；②连续生产周期首日出库、末日入库；
@@ -7102,6 +7119,35 @@ async function syncUsageFromProduction(manualSave) {
     }
 }
 
+function pairUsage(recs) {
+    const groups = {};
+    (recs || []).forEach(r => {
+        const tt = r.targetType || 'mold';
+        const key = tt + '|' + (r.machine || '') + '|' + r.moldId;
+        (groups[key] = groups[key] || []).push(r);
+    });
+    const cycles = [];
+    Object.keys(groups).forEach(k => {
+        const arr = groups[k].slice().sort((a,b) => {
+            if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+            if (a.direction !== b.direction) return a.direction === 'out' ? -1 : 1;
+            return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+        });
+        let pending = null;
+        arr.forEach(r => {
+            if (r.direction === 'out') {
+                if (pending) cycles.push({ out: pending, in: null });
+                pending = r;
+            } else {
+                if (pending) { cycles.push({ out: pending, in: r }); pending = null; }
+                else cycles.push({ out: null, in: r });
+            }
+        });
+        if (pending) cycles.push({ out: pending, in: null });
+    });
+    return cycles;
+}
+
 function renderUsageTable() {
     const tbody = document.getElementById('usage-tbody');
     const search = document.getElementById('usage-search').value.toLowerCase();
@@ -7131,63 +7177,23 @@ function renderUsageTable() {
             if (!codeText.includes(search) && !nameText.includes(search)) return false;
         }
         return true;
-    }).sort((a,b) => b.date.localeCompare(a.date));
+    });
 
-    if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="table-empty">暂无出入库记录</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = filtered.map(r => {
-        if (r.recordType === 'spare') {
-            // 备件出入库记录
-            const list = (r.spareCat === 'mold') ? spareParts : fixtureSpareParts;
-            const spare = list.find(s => s.id === r.spareId);
-            const dirTag = r.spareDirection === 'in'
-                ? '<span style="display:inline-block;padding:1px 5px;background:#34a853;color:#fff;border-radius:3px;font-size:10px;">入库</span>'
-                : '<span style="display:inline-block;padding:1px 5px;background:#ea4335;color:#fff;border-radius:3px;font-size:10px;">出库</span>';
-            const catTag = r.spareCat === 'mold'
-                ? '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;">模具备件</span>'
-                : '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;">工装备件</span>';
-            return `<tr>
-                <td>${r.spareDirection==='out' ? r.date : ''}</td>
-                <td>${r.spareDirection==='in' ? r.date : ''}</td>
-                <td>${catTag}${escapeHtml((spare||{}).name||'已删除')}</td>
-                <td>—</td>
-                <td>${r.spareDirection === 'out' ? '-' : '+'}${r.spareQty||0}</td>
-                <td>${spare ? (spare.stock||0) : '—'}</td>
-                <td>—</td>
-                <td>${escapeHtml(r.operator||'—')}</td>
-                <td title="${escapeHtml(r.notes||'')}">${escapeHtml(r.notes ? (r.notes.length > 15 ? r.notes.slice(0,15)+'...' : r.notes) : '—')}</td>
-                <td style="white-space:nowrap">
-                    ${canEdit() ? `<button class="btn-icon" title="编辑" onclick="openUsageForm('${r.id}')">✏</button>` : ''}
-                    ${canEdit() ? `<button class="btn-icon danger" title="删除" onclick="deleteUsage('${r.id}')">🗑</button>` : ''}
-                </td>
-            </tr>`;
-        }
-        // 模具/工装出入库记录
-        const targetType = r.targetType || 'mold';
-        let mold = null;
-        if (targetType === 'fixture') {
-            mold = fixtures.find(f => f.id === r.moldId) || fixtures.find(f => f.code === r.moldId);
-        } else {
-            mold = getMoldById(r.moldId) || molds.find(m => m.code === r.moldId);
-        }
-        const typeTag = targetType === 'fixture'
-            ? '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">工装</span>'
-            : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
-        const dirTag = r.direction === 'out'
-            ? '<span style="display:inline-block;padding:1px 5px;background:#34a853;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">出库</span>'
-            : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">入库</span>';
+    // 备件记录保持独立行；模具/工装记录按 (类型,机台,编号) 配对成使用周期行（出库、入库同行闭环）
+    const renderSpare = (r) => {
+        const list = (r.spareCat === 'mold') ? spareParts : fixtureSpareParts;
+        const spare = list.find(s => s.id === r.spareId);
+        const catTag = r.spareCat === 'mold'
+            ? '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;">模具备件</span>'
+            : '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;">工装备件</span>';
         return `<tr>
-            <td>${r.direction==='out' ? r.date : ''}</td>
-            <td>${r.direction==='in' ? r.date : ''}</td>
-            <td>${escapeHtml((mold||{}).code||'已删除')}</td>
-            <td class="cell-left">${typeTag}${escapeHtml((mold||{}).name||'—')}</td>
-            <td>${escapeHtml(r.machine||'—')}</td>
-            <td>${(r.shots||0).toLocaleString()}</td>
-            <td>${mold ? (mold.shots||0).toLocaleString() : '—'}</td>
-            <td>${r.duration||0}</td>
+            <td>${r.spareDirection==='out' ? r.date : ''}</td>
+            <td>${r.spareDirection==='in' ? r.date : ''}</td>
+            <td>${catTag}${escapeHtml((spare||{}).name||'已删除')}</td>
+            <td>—</td>
+            <td>${r.spareDirection === 'out' ? '-' : '+'}${r.spareQty||0}</td>
+            <td>${spare ? (spare.stock||0) : '—'}</td>
+            <td>—</td>
             <td>${escapeHtml(r.operator||'—')}</td>
             <td title="${escapeHtml(r.notes||'')}">${escapeHtml(r.notes ? (r.notes.length > 15 ? r.notes.slice(0,15)+'...' : r.notes) : '—')}</td>
             <td style="white-space:nowrap">
@@ -7195,7 +7201,72 @@ function renderUsageTable() {
                 ${canEdit() ? `<button class="btn-icon danger" title="删除" onclick="deleteUsage('${r.id}')">🗑</button>` : ''}
             </td>
         </tr>`;
-    }).join('');
+    };
+
+    const renderCycle = (c) => {
+        const o = c.out, n = c.in;
+        const r = n || o;
+        const tt = r.targetType || 'mold';
+        let mold = null;
+        if (tt === 'fixture') {
+            mold = fixtures.find(f => f.id === r.moldId) || fixtures.find(f => f.code === r.moldId);
+        } else {
+            mold = getMoldById(r.moldId) || molds.find(m => m.code === r.moldId);
+        }
+        const typeTag = tt === 'fixture'
+            ? '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">工装</span>'
+            : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">模具</span>';
+        const shots = n ? (n.shots || 0) : (o ? (o.shots || 0) : 0);
+        const dur = n ? (n.duration || 0) : (o ? (o.duration || 0) : 0);
+        const op = (n && n.operator) ? n.operator : ((o && o.operator) ? o.operator : '');
+        const note = (n && n.notes) ? n.notes : ((o && o.notes) ? o.notes : '');
+        const machine = (n && n.machine) ? n.machine : ((o && o.machine) ? o.machine : '');
+        let actions = '';
+        if (canEdit()) {
+            if (o && n) {
+                actions = '<button class="btn-icon" title="编辑出库记录" onclick="openUsageForm(\'' + o.id + '\')">📤</button>'
+                    + '<button class="btn-icon" title="编辑入库记录" onclick="openUsageForm(\'' + n.id + '\')">📥</button>'
+                    + '<button class="btn-icon danger" title="删除整个周期" onclick="deleteUsageCycle(\'' + o.id + '\',\'' + n.id + '\')">🗑</button>';
+            } else if (o) {
+                actions = '<button class="btn-icon" title="编辑" onclick="openUsageForm(\'' + o.id + '\')">✏</button>'
+                    + '<button class="btn-icon danger" title="删除" onclick="deleteUsageCycle(\'' + o.id + '\',\'\')">🗑</button>';
+            } else {
+                actions = '<button class="btn-icon" title="编辑" onclick="openUsageForm(\'' + n.id + '\')">✏</button>'
+                    + '<button class="btn-icon danger" title="删除" onclick="deleteUsageCycle(\'\',\'' + n.id + '\')">🗑</button>';
+            }
+        }
+        const noteCell = note
+            ? '<td title="' + escapeHtml(note) + '">' + escapeHtml(note.length > 15 ? note.slice(0,15)+'...' : note) + '</td>'
+            : '<td>—</td>';
+        const inCell = n ? ('<td>' + n.date + '</td>')
+            : '<td><span style="color:#f5a623;font-size:11px">使用中</span></td>';
+        return '<tr>'
+            + '<td>' + (o ? o.date : '') + '</td>'
+            + inCell
+            + '<td>' + escapeHtml((mold||{}).code || '已删除') + '</td>'
+            + '<td class="cell-left">' + typeTag + escapeHtml((mold||{}).name || '—') + '</td>'
+            + '<td>' + escapeHtml(machine || '—') + '</td>'
+            + '<td>' + shots.toLocaleString() + '</td>'
+            + '<td>' + (mold ? (mold.shots||0).toLocaleString() : '—') + '</td>'
+            + '<td>' + (dur || 0) + '</td>'
+            + '<td>' + escapeHtml(op || '—') + '</td>'
+            + noteCell
+            + '<td style="white-space:nowrap">' + actions + '</td>'
+            + '</tr>';
+    };
+
+    const spareRows = filtered.filter(r => r.recordType === 'spare');
+    const cycles = pairUsage(filtered.filter(r => r.recordType !== 'spare'));
+    const rows = [];
+    spareRows.forEach(r => rows.push({ d: r.date, html: renderSpare(r) }));
+    cycles.forEach(c => rows.push({ d: c.in ? c.in.date : c.out.date, html: renderCycle(c) }));
+    rows.sort((a,b) => b.d.localeCompare(a.d));
+
+    if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" class="table-empty">暂无出入库记录</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rows.map(x => x.html).join('');
 }
 
 // ============================================================
