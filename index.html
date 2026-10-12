@@ -1918,7 +1918,7 @@ input[type=file]::file-selector-button:hover{background:var(--primary-light);col
                         <table>
                             <thead>
                                 <tr>
-                                    <th>日期</th><th>类型</th><th>模具编号</th><th>模具名称</th><th>机台</th>
+                                    <th>出库日期</th><th>入库日期</th><th>模具编号</th><th>模具名称</th><th>机台</th>
                                     <th>生产模次</th><th>累计模次</th><th>时长(h)</th>
                                     <th>操作员</th><th>备注</th><th>操作</th>
                                 </tr>
@@ -7147,9 +7147,9 @@ function renderUsageTable() {
                 ? '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;">模具备件</span>'
                 : '<span style="display:inline-block;padding:1px 5px;background:#7c1fa2;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;">工装备件</span>';
             return `<tr>
-                <td>${r.date}</td>
-                <td><strong>${catTag}${dirTag}</strong></td>
-                <td>${escapeHtml((spare||{}).name||'已删除')}</td>
+                <td>${r.spareDirection==='out' ? r.date : ''}</td>
+                <td>${r.spareDirection==='in' ? r.date : ''}</td>
+                <td>${catTag}${escapeHtml((spare||{}).name||'已删除')}</td>
                 <td>—</td>
                 <td>${r.spareDirection === 'out' ? '-' : '+'}${r.spareQty||0}</td>
                 <td>${spare ? (spare.stock||0) : '—'}</td>
@@ -7177,10 +7177,10 @@ function renderUsageTable() {
             ? '<span style="display:inline-block;padding:1px 5px;background:#34a853;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">出库</span>'
             : '<span style="display:inline-block;padding:1px 5px;background:#1a73e8;color:#fff;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:middle">入库</span>';
         return `<tr>
-            <td>${r.date}</td>
-            <td><strong>${typeTag}${dirTag}</strong></td>
+            <td>${r.direction==='out' ? r.date : ''}</td>
+            <td>${r.direction==='in' ? r.date : ''}</td>
             <td>${escapeHtml((mold||{}).code||'已删除')}</td>
-            <td class="cell-left">${escapeHtml((mold||{}).name||'—')}</td>
+            <td class="cell-left">${typeTag}${escapeHtml((mold||{}).name||'—')}</td>
             <td>${escapeHtml(r.machine||'—')}</td>
             <td>${(r.shots||0).toLocaleString()}</td>
             <td>${mold ? (mold.shots||0).toLocaleString() : '—'}</td>
