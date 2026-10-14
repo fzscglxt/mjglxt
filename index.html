@@ -2870,44 +2870,96 @@ const cloudSync = {
             return await res.json();
         } catch(e) { console.warn('cloud pull', e); return null; }
     },
+    // 返回 'ok'（成功）/ 'conflict'（他人已更新，需刷新）/ 'error'（网络失败，可重试）
     push: async function() {
-        if (!this.isCloudConfigured()) return false;
+        if (!this.isCloudConfigured()) return 'error';
         try {
             const cur = await this.pull();
             const expectVersion = cur ? cur.version : 0;
+            const uname = (typeof currentUser !== 'undefined' && currentUser && currentUser.username) ? currentUser.username : 'web';
             const res = await fetch(CLOUD_CONFIG.apiBase + '/api/db', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'If-Version': String(expectVersion) },
-                body: JSON.stringify({ db: this.pack(), savedBy: 'web' })
+                body: JSON.stringify({ db: this.pack(), savedBy: uname })
             });
             if (res.status === 200) {
                 const j = await res.json();
                 this.version = j.version;
                 this.ready = true;
                 this.setStatus('ok');
-                return true;
+                return 'ok';
             } else if (res.status === 409) {
+                this.version = expectVersion; // 记住云端最新版本
                 this.setStatus('warn');
-                if (typeof showToast === 'function') showToast('⚠️ 数据已被其他电脑更新，请刷新页面', 'warning');
+                if (typeof showToast === 'function') showToast('⚠️ 数据已被其他电脑更新，请刷新页面后再操作', 'warning');
+                return 'conflict';
             }
-        } catch(e) { console.warn('cloud push', e); this.setStatus('err'); }
-        return false;
+            this.ready = false;
+            return 'error';
+        } catch(e) { console.warn('cloud push', e); this.setStatus('err'); this.ready = false; return 'error'; }
     },
+    // 自动上云权限：大屏只读/查看员不推
+    canAutoWrite: function() {
+        if (!this.isCloudConfigured()) return false;
+        const u = (typeof currentUser !== 'undefined') ? currentUser : null;
+        if (u && (u.kiosk || u.role === 'viewer')) return false;
+        return true;
+    },
+    // 业务改动后调用：1.5s 防抖合并，自动推送，无需手动点保存
     schedulePush: function() {
-        if (!this.ready) return;
+        if (!this.canAutoWrite()) return;
+        this.autoDirty = true;
         this.setStatus('pending');
-        if (typeof showToast === 'function') showToast('📝 有未保存的修改，请点击「保存」按钮', 'info');
+        if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+        if (this.pushTimer) clearTimeout(this.pushTimer);
+        this.pushTimer = setTimeout(() => this.flushAutoPush(), 1500);
+    },
+    flushAutoPush: async function() {
+        if (this.pushTimer) { clearTimeout(this.pushTimer); this.pushTimer = null; }
+        if (!this.canAutoWrite()) { this.autoDirty = false; return; }
+        if (this.autoPushing) { // 推送中又有改动，稍后再推一次
+            this.autoDirty = true;
+            this.pushTimer = setTimeout(() => this.flushAutoPush(), 1500);
+            return;
+        }
+        if (!this.ready) { // 启动断网后恢复：先探活
+            const cur = await this.pull();
+            if (!cur) { this.autoDirty = true; this.retryTimer = setTimeout(() => this.flushAutoPush(), 30000); return; }
+            this.ready = true;
+        }
+        this.autoPushing = true;
+        this.autoDirty = false;
+        this.setStatus('sync');
+        const r = await this.push();
+        this.autoPushing = false;
+        if (r === 'ok') {
+            try { if (window.localBackup && localBackup.dirHandle) localBackup.save(); } catch(e) {}
+        } else if (r === 'error') {
+            // 网络失败：保留本机改动，30s 自动重试
+            this.autoDirty = true;
+            if (this.retryTimer) clearTimeout(this.retryTimer);
+            this.retryTimer = setTimeout(() => this.flushAutoPush(), 30000);
+        }
+        // conflict：不自动重试，避免覆盖他人数据，等用户刷新
     },
     manualSave: function() {
         if (!this.ready) {
-            if (typeof showToast === 'function') showToast('⚠️ 云端未连接', 'warning');
+            if (typeof showToast === 'function') showToast('⚠️ 云端未连接，正在自动重试…', 'warning');
+            this.flushAutoPush();
             return;
         }
         this.setStatus('sync');
-        this.push().then(success => {
-            if (success) {
+        this.push().then(r => {
+            if (r === 'ok') {
                 this.setStatus('ok');
                 if (typeof showToast === 'function') showToast('✅ 保存成功', 'success');
+                try { if (window.localBackup && localBackup.dirHandle) localBackup.save(); } catch(e) {}
+            } else if (r === 'conflict') {
+                // 已提示刷新
+            } else {
+                if (typeof showToast === 'function') showToast('❌ 云端保存失败，已存本机，将自动重试', 'warning');
+                this.autoDirty = true;
+                this.flushAutoPush();
             }
         });
     },
@@ -2988,6 +3040,27 @@ const cloudSync = {
     }
 };
 window.cloudSync = cloudSync;
+
+// 关闭/切走页面前最后兜底：keepalive 尽力把未推送改动发出
+function _moldBeaconFlush() {
+    if (!cloudSync.autoDirty || !cloudSync.canAutoWrite()) return;
+    try {
+        const uname = (typeof currentUser !== 'undefined' && currentUser && currentUser.username) ? currentUser.username : 'web';
+        fetch(CLOUD_CONFIG.apiBase + '/api/db', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'If-Version': String(cloudSync.version || 0) },
+            body: JSON.stringify({ db: cloudSync.pack(), savedBy: uname }),
+            keepalive: true
+        }).catch(() => {});
+    } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && cloudSync.autoDirty && cloudSync.canAutoWrite()) {
+        if (cloudSync.flushAutoPush) cloudSync.flushAutoPush();
+        _moldBeaconFlush();
+    }
+});
+window.addEventListener('pagehide', () => { _moldBeaconFlush(); });
 
 // ============================================================
 // 本地文件夹自动备份（File System Access API）
@@ -7104,7 +7177,7 @@ async function syncUsageFromProduction(manualSave) {
         if (manualSave) {
             if (typeof showToast === 'function') showToast('📝 ' + msg + '，正在保存到云端...', 'info');
             const ok = await cloudSync.push();
-            if (ok) { if (typeof showToast === 'function') showToast('✅ 生产记录已同步并保存', 'success'); }
+            if (ok === 'ok') { if (typeof showToast === 'function') showToast('✅ 生产记录已同步并保存', 'success'); }
             else if (typeof showToast === 'function') showToast('⚠️ 本地已重建，云端保存冲突或失败，请点页面「保存」按钮', 'warning');
         } else if (typeof showToast === 'function') {
             showToast('📝 ' + msg + '，请点「保存」按钮同步云端', 'info');
